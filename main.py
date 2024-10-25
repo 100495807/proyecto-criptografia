@@ -467,7 +467,7 @@ class UserApp:
         songs = cursor.fetchall()
         conn.close()
 
-        if not songs:
+        if self.current_user is not None and not songs:
             messagebox.showerror("Play Song", "No songs found")
             return
 
@@ -622,7 +622,7 @@ def update_password(email, hashed_password, salt):
 
 
 
-def test_aes_gcm_with_db(user_id, password, salt):
+"""def test_aes_gcm_with_db(user_id, password, salt):
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ?', (user_id,))
@@ -680,7 +680,7 @@ password = "a"
 salt = "kV2YlrkB/XTphc2zNRLqtw=="  # This should be the actual salt used for the user
 
 test_aes_gcm_with_db(user_id, password, salt)
-test_authentication_failure_with_db(user_id, password, salt)
+test_authentication_failure_with_db(user_id, password, salt)"""
 
 
 if __name__ == "__main__":

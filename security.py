@@ -60,6 +60,9 @@ def encrypt_aes_gcm(plain_text, key, nonce):
     encryptor = cipher.encryptor()
     cipher_text = encryptor.update(plain_text.encode()) + encryptor.finalize()
     tag = encryptor.tag
+
+    print(f"Cifrado AES-GCM: Texto plano: '{plain_text}' | Clave: {len(key) * 8} bits | "
+          f"Etiqueta: {base64.b64encode(tag).decode()} | Texto cifrado: {base64.b64encode(cipher_text).decode()} | Nonce: {base64.b64encode(nonce).decode()}")
     return base64.b64encode(nonce + tag + cipher_text).decode('utf-8')
 
 def decrypt_aes_gcm(cipher_text_b64, key, nonce):
@@ -68,5 +71,11 @@ def decrypt_aes_gcm(cipher_text_b64, key, nonce):
     cipher_text = cipher_text[28:]
     cipher = Cipher(algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend())
     decryptor = cipher.decryptor()
-    plain_text = decryptor.update(cipher_text) + decryptor.finalize()
-    return plain_text.decode()
+    try:
+        plain_text = decryptor.update(cipher_text) + decryptor.finalize()
+        print(f"Descifrado AES-GCM: Texto cifrado: {cipher_text_b64} | Clave: {len(key) * 8} bits | "
+              f"Etiqueta: {base64.b64encode(tag).decode()} | Texto plano: '{plain_text.decode()}'")
+        return plain_text.decode()
+    except InvalidTag:
+        print("Error: Etiqueta inválida.")
+        return None

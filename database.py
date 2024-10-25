@@ -6,7 +6,6 @@ from security import encrypt_aes_gcm, decrypt_aes_gcm, generate_key, derive_key
 def create_connection():
     base_dir = os.path.dirname(__file__)
     db_path = os.path.join(base_dir, 'database.db')
-    print(f"Conectando a la base de datos en: {db_path}")
     conn = sqlite3.connect(db_path)
     return conn
 
@@ -104,7 +103,6 @@ def delete_user(username):
     print(f"User '{username}' deleted successfully.")
 
 
-
 def register_song(user_id, song_name, author_name, password, salt):
     conn = create_connection()
     cursor = conn.cursor()
@@ -140,7 +138,7 @@ def register_song(user_id, song_name, author_name, password, salt):
 def get_songs_by_user(user_id):
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT song_name FROM songs WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?', (user_id,))
     songs = cursor.fetchall()
     conn.close()
     return songs
@@ -179,60 +177,36 @@ def delete_all_tables():
     delete_all_users()
     delete_all_songs()
 
-def save_song(user_id, song_name, author_name):
-    """Cifra y guarda una canción para el usuario."""
-    # Cifrar el nombre de la canción
-    key = generate_key()
-    encrypted_song = encrypt_aes_gcm(song_name, key)
-    print(f"DEBUG: Canción cifrada: '{song_name}'.")
-
-    # Almacena la canción cifrada en la base de datos
-    success = register_song(user_id, song_name, author_name, encrypted_song, key)
-    if success:
-        print(f"DEBUG: Canción '{song_name}' guardada correctamente para el usuario ID {user_id}.")
-    else:
-        print(f"DEBUG: Error al guardar la canción '{song_name}' para el usuario ID {user_id}.")
-
-
-def get_songs(user_id):
+def get_songs(user_id, password, salt):
     """Recupera y descifra las canciones del usuario."""
     # Obtiene las canciones del usuario desde la base de datos
+    key = derive_key(password, salt)
     songs = get_songs_by_user(user_id)
-    print(f"DEBUG: Recuperando {len(songs)} canciones para el usuario ID {user_id}.")
 
     decrypted_songs = []
-    for song in songs:
-        song_name = song[0]
-        encrypted_song_name, encryption_key = get_encrypted_song(user_id, song_name)
-
-        if encrypted_song_name and encryption_key:
-            decrypted_song = decrypt_aes_gcm(encrypted_song_name, encryption_key)
-            decrypted_songs.append({'name': song_name, 'data': decrypted_song})
-            print(f"DEBUG: Canción '{song_name}' descifrada correctamente.")
+    for encrypted_song_name, encrypted_author_name, nonce in songs:
+        if encrypted_song_name and encrypted_author_name and key:
+            song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
+            author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
+            decrypted_songs.append({'name': song_name, 'author': author_name})
+            print(f"DEBUG: Canción '{song_name}' de '{author_name}' descifrada.")
         else:
-            print(f"DEBUG: No se encontró canción cifrada para '{song_name}'.")
-
+            print("DEBUG: Error al descifrar la canción.")
     return decrypted_songs
 
 
-def get_encrypted_song(user_id, song_name):
+def get_encrypted_song(user_id, encrypted_song_name):
     """Recupera la canción cifrada por el nombre del usuario y el nombre de la canción."""
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT encrypted_song_name FROM songs WHERE user_id = ? AND song_name = ?',
-                   (user_id, song_name))
+    cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ? AND encrypted_song_name = ?',
+                   (user_id, encrypted_song_name))
     result = cursor.fetchone()
     conn.close()
     if result:
-        print(f"DEBUG: Canción cifrada '{song_name}' recuperada para el usuario ID {user_id}.")
+        print(f"DEBUG: Canción cifrada '{encrypted_song_name}' recuperada para el usuario ID {user_id}.")
     else:
-        print(f"DEBUG: No se encontró la canción cifrada '{song_name}' para el usuario ID {user_id}.")
-    return result if result else None (None, None)
+        print(f"DEBUG: No se encontró la canción cifrada '{encrypted_song_name}' para el usuario ID {user_id}.")
+    return result if result else None
 
-
-
-# Imprimir los usuarios en la consola
-users = get_all_users()
-for user in users:
-    print(user)
 
