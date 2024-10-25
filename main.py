@@ -1,11 +1,13 @@
+import os
+import sqlite3
 import tkinter as tk
 import re
 from tkinter import messagebox
 from tkinter import ttk
-from setup_db import create_table, register_user, authenticate_user, register_song, get_user_id, \
-    create_connection, create_songs_table, delete_all_tables
+from database import create_users_table, register_user, authenticate_user, register_song, get_user_id, \
+    create_connection, create_songs_table, delete_all_tables, create_all_tables
 from security import hash_password, verify_password, generate_key, encrypt_aes_gcm, generate_salt, \
-    decrypt_aes_gcm
+    decrypt_aes_gcm, derive_key
 import smtplib
 import random
 import string
@@ -45,6 +47,8 @@ class UserApp:
         self.main_frame.pack(fill="both", expand=True)
 
         self.current_user = None
+        self.current_password = None
+        self.current_salt = None
 
         # Frames para las diferentes secciones
         self.login_username_frame = ttk.Frame(root, style="TFrame")
@@ -361,6 +365,8 @@ class UserApp:
             if verify_password(stored_password, password, salt):
                 messagebox.showinfo("Login", "Login successful!")
                 self.current_user = username
+                self.current_password = password
+                self.current_salt = salt
                 self.show_frame(self.post_login_frame)  # Show the new frame
             else:
                 messagebox.showerror("Login", "Invalid password")
@@ -416,6 +422,7 @@ class UserApp:
             return
 '''
         salt = generate_salt()
+        print(salt)
         hashed_password, salt = hash_password(password, salt)
         if register_user(username, email, hashed_password, salt, phone, gender, address):
             messagebox.showinfo("Register", "You have registered successfully")
@@ -437,31 +444,17 @@ class UserApp:
             messagebox.showerror("Register Song", "User ID not found")
             return
 
-        conn = create_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT song_name FROM songs WHERE user_id = ? AND song_name = ? AND author_name = ?',
-                       (user_id, song_name, author_name))
-        if cursor.fetchone():
-            messagebox.showerror("Register Song", "This song by this author is already registered.")
-            conn.close()
-            print(f"DEBUG: The song '{song_name}' by '{author_name}' is already registered.")
-            return
-        conn.close()
-
-        key = generate_key()  # Generate or retrieve the encryption key
-        encrypted_song_name = encrypt_aes_gcm(song_name, key)
-        print(
-            f"DEBUG: user_id: {user_id}, song_name: {song_name}, author_name: {author_name}, encrypted_song_name: {encrypted_song_name}, encryption_key: {key}")
-        if register_song(user_id, song_name, author_name, encrypted_song_name, key):
+        try:
+            if not register_song(user_id, song_name, author_name, self.current_password, self.current_salt):
+                raise ValueError("Song already exists")
             messagebox.showinfo("Register Song", "Song registered successfully.")
             # Clear the fields after registering
             self.song_entry.delete(0, tk.END)
             self.author_entry.delete(0, tk.END)
-        else:
-            messagebox.showerror("Register Song", "Failed to register song")
+        except ValueError as e:
+            messagebox.showerror("Register Song", str(e))
 
     def play_random_song(self):
-        print("play_random_song called")
         user_id = get_user_id(self.current_user)
         if user_id is None:
             messagebox.showerror("Play Song", "User ID not found")
@@ -469,8 +462,8 @@ class UserApp:
 
         conn = create_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT song_name, author_name, encrypted_song_name, encryption_key FROM songs WHERE '
-                       'user_id = ?', (user_id,))
+        cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?',
+                       (user_id,))
         songs = cursor.fetchall()
         conn.close()
 
@@ -479,13 +472,17 @@ class UserApp:
             return
 
         song = random.choice(songs)
-        encrypted_song_name, author_name, encryption_key = song[2], song[1], song[3]
+        encrypted_song_name, encrypted_author_name, nonce = song
+
         try:
-            # Descifra el nombre de la canción usando la clave almacenada
-            song_name = decrypt_aes_gcm(encrypted_song_name, encryption_key)
+            key = derive_key(self.current_password, self.current_salt)
+            song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
+            author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
             messagebox.showinfo("Play Song", f"Playing '{song_name}' by '{author_name}'")
         except Exception as e:
-            messagebox.showerror("Play Song", f"Error decrypting song name: {e}")
+            messagebox.showerror("Play Song", f"Error decrypting song: {e}")
+
+
     def toggle_password_visibility(self, entry, button):
         if entry.cget('show') == '*':
             entry.config(show='')
@@ -499,6 +496,27 @@ class UserApp:
         email = self.email_entry_recover.get()
         if not email:
             messagebox.showerror("Error", "Please enter your email")
+            return
+
+        # Retrieve the registered email for the current user from the database
+        conn = create_connection()
+        cursor = conn.cursor()
+        user_id = self.username_entry_login.get()
+        print(user_id)
+        cursor.execute("SELECT email FROM users WHERE username = ?", (user_id,))
+        result = cursor.fetchone()
+        print(result)
+        conn.close()
+
+        if result is None:
+            messagebox.showerror("Error", "User not found")
+            return
+
+        registered_email = result[0]
+
+        # Check if the entered email matches the registered email
+        if email != registered_email:
+            messagebox.showerror("Error", "The entered email does not match the registered email")
             return
 
         # Generate a random verification code
@@ -564,16 +582,27 @@ class UserApp:
             self.songs_treeview.delete(item)  # Clear the treeview
 
         # Fetch songs from the database
-        connection = create_connection()
-        cursor = connection.cursor()
         user_id = get_user_id(self.current_user)
-        cursor.execute("SELECT song_name, author_name FROM songs WHERE user_id = ?", (user_id,))
-        songs = cursor.fetchall()
-        connection.close()
+        if user_id is None:
+            messagebox.showerror("View Songs", "User ID not found")
+            return
 
-        # Insert songs into the treeview
-        for song in songs:
-            self.songs_treeview.insert("", "end", values=(song[0], song[1]))
+        conn = create_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?",
+                       (user_id,))
+        songs = cursor.fetchall()
+        conn.close()
+
+        # Decrypt and insert songs into the treeview
+        for encrypted_song_name, encrypted_author_name, nonce in songs:
+            try:
+                key = derive_key(self.current_password, self.current_salt)
+                song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
+                author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
+                self.songs_treeview.insert("", "end", values=(song_name, author_name))
+            except InvalidTag as e:
+                messagebox.showerror("View Songs", f"Error decrypting song: {e}")
 
         self.show_frame(self.view_songs_frame)
 
@@ -593,52 +622,69 @@ def update_password(email, hashed_password, salt):
 
 
 
-def test_aes_gcm():
-    key = generate_key()  # Generar clave aleatoria
-    plain_text = "Mensaje de prueba"
+def test_aes_gcm_with_db(user_id, password, salt):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ?', (user_id,))
+    song = cursor.fetchone()
+    conn.close()
 
-    # Cifrar el texto
-    cipher_text = encrypt_aes_gcm(plain_text, key)
-    print(f"Cifrado: {cipher_text}")
+    if not song:
+        print("No songs found for the user.")
+        return
 
-    # Descifrar el texto
-    decrypted_text = decrypt_aes_gcm(cipher_text, key)
-    print(f"Descifrado: {decrypted_text}")
+    encrypted_song_name, nonce = song
+    key = derive_key(password, salt)
 
-    # Verificar si el descifrado es igual al texto original
-    assert decrypted_text == plain_text, "Error: El texto descifrado no coincide con el original."
-    print("Cifrado y descifrado exitosos.")
+    # Decrypt the song
+    decrypted_song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
+    print(f"Decrypted Song: {decrypted_song_name}")
 
-test_aes_gcm()
+    # Encrypt the song again
+    re_encrypted_song_name = encrypt_aes_gcm(decrypted_song_name, key, nonce)
+    print(f"Re-encrypted Song: {re_encrypted_song_name}")
 
-def test_authentication_failure():
-    key = generate_key()
-    plain_text = "Mensaje de prueba"
+    # Verify if the re-encrypted song matches the original encrypted song
+    assert re_encrypted_song_name == encrypted_song_name, "Error: The re-encrypted song does not match the original."
+    print("Encryption and decryption successful.")
 
-    # Cifrar el texto
-    cipher_text = encrypt_aes_gcm(plain_text, key)
+def test_authentication_failure_with_db(user_id, password, salt):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ?', (user_id,))
+    song = cursor.fetchone()
+    conn.close()
 
-    # Verificar la longitud del texto cifrado
-    print(f"Texto cifrado original: {cipher_text}")
+    if not song:
+        print("No songs found for the user.")
+        return
 
-    # Modificar el tag o una parte crítica
-    # Supongamos que el tag está en una posición específica, alteramos esa parte:
-    modified_cipher_text = cipher_text[:16] + "XXXXXX" + cipher_text[22:]  # Alterar una parte crítica
+    encrypted_song_name, nonce = song
+    key = derive_key(password, salt)
+
+    # Modify the encrypted song to simulate an authentication failure
+    modified_encrypted_song_name = encrypted_song_name[:16] + "XXXXXX" + encrypted_song_name[22:]
 
     try:
-        print("Intentando descifrar el texto modificado...")
-        decrypted_text = decrypt_aes_gcm(modified_cipher_text, key)
-        print(f"Descifrado: {decrypted_text}")
+        print("Attempting to decrypt the modified song...")
+        decrypted_song_name = decrypt_aes_gcm(modified_encrypted_song_name, key, nonce)
+        print(f"Decrypted Song: {decrypted_song_name}")
     except InvalidTag as e:
-        print(f"Error esperado (InvalidTag): {str(e)}")
+        print(f"Expected error (InvalidTag): {str(e)}")
     except Exception as e:
-        print(f"Otro error: {str(e)}")
+        print(f"Other error: {str(e)}")
 
-test_authentication_failure()
+# Example usage
+user_id = "jorge"
+password = "a"
+salt = "kV2YlrkB/XTphc2zNRLqtw=="  # This should be the actual salt used for the user
+
+test_aes_gcm_with_db(user_id, password, salt)
+test_authentication_failure_with_db(user_id, password, salt)
+
 
 if __name__ == "__main__":
-    create_table()
-    create_songs_table()
+    create_all_tables()
     root = tk.Tk()
     root.geometry("400x400")
     app = UserApp(root)

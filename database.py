@@ -1,17 +1,17 @@
 import sqlite3
 import os
-from security import encrypt_aes_gcm, decrypt_aes_gcm, generate_key
+from security import encrypt_aes_gcm, decrypt_aes_gcm, generate_key, derive_key
 
 
 def create_connection():
     base_dir = os.path.dirname(__file__)
-    db_path = os.path.join(base_dir, 'data_base.db')
+    db_path = os.path.join(base_dir, 'database.db')
     print(f"Conectando a la base de datos en: {db_path}")
     conn = sqlite3.connect(db_path)
     return conn
 
 
-def create_table():
+def create_users_table():
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS users (
@@ -28,6 +28,26 @@ def create_table():
     conn.close()
 
 
+def create_songs_table():
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute('''CREATE TABLE IF NOT EXISTS songs (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER,
+        encrypted_song_name BLOB NOT NULL,
+        encrypted_author_name BLOB NOT NULL,
+        nonce BLOB NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )''')
+    conn.commit()
+    conn.close()
+
+def create_all_tables():
+    create_users_table()
+    create_songs_table()
+
+import base64
+
 def register_user(username, email, hashed_password, salt, phone, gender, address):
     conn = create_connection()
     cursor = conn.cursor()
@@ -36,10 +56,15 @@ def register_user(username, email, hashed_password, salt, phone, gender, address
     if cursor.fetchone():
         conn.close()
         return False
+
+    # Decode Base64-encoded hashed_password and salt back to bytes
+    hashed_password_bytes = base64.b64decode(hashed_password)
+    salt_bytes = base64.b64decode(salt)
+
     cursor.execute(
         'INSERT INTO users (username, email, hashed_password, salt, phone, gender, address) '
         'VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (username, email, sqlite3.Binary(hashed_password), sqlite3.Binary(salt), phone, gender, address))
+        (username, email, sqlite3.Binary(hashed_password_bytes), sqlite3.Binary(salt_bytes), phone, gender, address))
     conn.commit()
     conn.close()
     print(f"Usuario registrado: {username}, Hashed Password: {hashed_password}, Salt: {salt}")
@@ -79,43 +104,38 @@ def delete_user(username):
     print(f"User '{username}' deleted successfully.")
 
 
-def create_songs_table():
+
+def register_song(user_id, song_name, author_name, password, salt):
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS songs (
-        id INTEGER PRIMARY KEY,
-        user_id INTEGER,
-        song_name TEXT NOT NULL,
-        author_name TEXT NOT NULL,
-        encrypted_song_name BLOB NOT NULL,
-        encryption_key BLOB NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id)
-    )''')
+
+    # Fetch all songs for the user
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?', (user_id,))
+    songs = cursor.fetchall()
+
+    key = derive_key(password, salt)
+
+    # Decrypt all songs and check if the song already exists
+    for encrypted_song_name, encrypted_author_name, nonce in songs:
+        decrypted_song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
+        decrypted_author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
+        if decrypted_song_name == song_name and decrypted_author_name == author_name:
+            conn.close()
+            return False  # Song already exists
+
+    # Encrypt the new song
+    nonce = os.urandom(12)
+    encrypted_song_name = encrypt_aes_gcm(song_name, key, nonce)
+    encrypted_author_name = encrypt_aes_gcm(author_name, key, nonce)
+
+    # Insert the new song
+    cursor.execute(
+        'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce) VALUES (?, ?, ?, ?)',
+        (user_id, encrypted_song_name, encrypted_author_name, nonce)
+    )
     conn.commit()
     conn.close()
-
-
-def register_song(user_id, song_name, author_name, encrypted_song_name, encryption_key):
-    print(f"DEBUG: user_id={user_id}, song_name={song_name}, author_name={author_name}, "
-          f"encrypted_song_name={encrypted_song_name}, encryption_key={encryption_key}, "
-          f"tipo encryption_key={type(encryption_key)}")
-
-    try:
-        conn = create_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            'INSERT INTO songs (user_id, song_name, author_name, encrypted_song_name, encryption_key) VALUES (?, ?, ?, ?, ?)',
-            (user_id, song_name, author_name, encrypted_song_name, encryption_key))
-        conn.commit()
-        conn.close()
-        print(
-            f"DEBUG: Canción '{song_name}' registrada correctamente para el usuario ID {user_id}.")
-        return True
-    except Exception as e:
-        print(
-            f"ERROR: No se pudo registrar la canción '{song_name}' para el usuario ID {user_id}. Excepción: {e}")
-        return False
-
+    return True
 
 def get_songs_by_user(user_id):
     conn = create_connection()
