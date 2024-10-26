@@ -1,27 +1,24 @@
-import os
-import sqlite3
-import tkinter as tk
-import re
-from tkinter import messagebox
-from tkinter import ttk
-from users import create_users_table, register_user, authenticate_user, get_user_id, \
-    create_connection, create_songs_table, create_all_tables
-from songs import register_song
-from security import hash_password, verify_password, generate_key, encrypt_aes_gcm, generate_salt, \
-    decrypt_aes_gcm, derive_key
 import smtplib
 import random
 import string
+import tkinter as tk
+from tkinter import messagebox
+from tkinter import ttk
+from query_users import register_user, authenticate_user, get_user_id, delete_songs_by_user_id, \
+    verify_email_recovery, get_user_by_email, update_password
+from query_songs import register_song, get_songs_by_user
+from security import hash_password, verify_password, generate_key, encrypt_aes_gcm, generate_salt, \
+    decrypt_aes_gcm, derive_key
+from database import create_all_tables
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
-
 from validation import validate_username, validate_password, validate_phone, validate_email
 
 
 class UserApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("User Login and Registration")
+        self.root.title("Inicio de sesión y registro")
 
         # Define a style
         self.style = ttk.Style()
@@ -63,7 +60,6 @@ class UserApp:
 
         self.create_main_frame()
         self.create_login_username_frame()
-        self.create_login_password_frame()
         self.create_register_frame()
         self.create_song_frame()
         self.create_recover_frame()
@@ -83,7 +79,6 @@ class UserApp:
     def show_frame(self, frame):
         self.main_frame.pack_forget()
         self.login_username_frame.pack_forget()
-        self.login_password_frame.pack_forget()
         self.register_frame.pack_forget()
         self.song_frame.pack_forget()
         self.recover_frame.pack_forget()
@@ -106,63 +101,50 @@ class UserApp:
         self.main_frame.grid_columnconfigure(0, weight=1)
         self.main_frame.grid_columnconfigure(3, weight=1)
 
-        self.login_button = ttk.Button(self.main_frame, text="Login", style="TButton",
+        self.login_button = ttk.Button(self.main_frame, text="Inicio de sesión", style="TButton",
                                        command=lambda: self.show_frame(self.login_username_frame))
         self.login_button.grid(row=0, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
-        self.register_button = ttk.Button(self.main_frame, text="Register", style="TButton",
+        self.register_button = ttk.Button(self.main_frame, text="Registro", style="TButton",
                                           command=lambda: self.show_frame(self.register_frame))
         self.register_button.grid(row=1, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
-        self.close_app_button = ttk.Button(self.main_frame, text="Close App", style="TButton",
+        self.close_app_button = ttk.Button(self.main_frame, text="Cerrar App", style="TButton",
                                            command=self.root.quit)
         self.close_app_button.grid(row=2, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
-
 
     def create_login_username_frame(self):
         self.login_username_frame = ttk.Frame(self.root, style="TFrame")
         self.login_username_frame.grid_columnconfigure(0, weight=1)
         self.login_username_frame.grid_columnconfigure(4, weight=1)
 
-        self.username_label = ttk.Label(self.login_username_frame, text="Username")
+        self.username_label = ttk.Label(self.login_username_frame, text="Usuario")
         self.username_label.grid(row=0, column=1, padx=5, pady=5)
         self.username_entry_login = ttk.Entry(self.login_username_frame, font=("Arial", 12))
         self.username_entry_login.grid(row=0, column=2, padx=5, pady=5)
 
-        self.verify_username_button = ttk.Button(self.login_username_frame, text="Next", style="TButton",
-                                                 command=self.verify_username)
-        self.verify_username_button.grid(row=1, column=1, columnspan=2, pady=10, sticky="ew")
+        self.password_label = ttk.Label(self.login_username_frame, text="Contraseña")
+        self.password_label.grid(row=1, column=1, padx=5, pady=5)
+        self.password_entry_login = ttk.Entry(self.login_username_frame, show="*", font=("Arial", 12))
+        self.password_entry_login.grid(row=1, column=2, padx=5, pady=5)
 
-        self.back_button = ttk.Button(self.login_username_frame, text="Back", style="TButton",
-                                      command=lambda: self.show_frame(self.main_frame))
-        self.back_button.grid(row=2, column=1, columnspan=2, pady=10, sticky="ew")
-
-    def create_login_password_frame(self):
-        self.login_password_frame = ttk.Frame(self.root, style="TFrame")
-        self.login_password_frame.grid_columnconfigure(0, weight=1)
-        self.login_password_frame.grid_columnconfigure(4, weight=1)
-
-        self.password_label = ttk.Label(self.login_password_frame, text="Password")
-        self.password_label.grid(row=0, column=1, padx=5, pady=5)
-        self.password_entry_login = ttk.Entry(self.login_password_frame, show="*", font=("Arial", 12))
-        self.password_entry_login.grid(row=0, column=2, padx=5, pady=5)
-
-        self.show_password_button_login = ttk.Button(self.login_password_frame, text="Show Password", style="TButton",
+        self.show_password_button_login = ttk.Button(self.login_username_frame, text="Mostrar Contraseña", style="TButton",
                                                      command=lambda: self.toggle_password_visibility(
                                                          self.password_entry_login,
                                                          self.show_password_button_login))
-        self.show_password_button_login.grid(row=0, column=3, padx=5, pady=5)
+        self.show_password_button_login.grid(row=1, column=3, padx=5, pady=5)
 
-        self.login_button = ttk.Button(self.login_password_frame, text="Login", style="TButton", command=self.login)
-        self.login_button.grid(row=1, column=1, columnspan=2, pady=10, sticky="ew")
+        self.verify_username_button = ttk.Button(self.login_username_frame, text="Inicio de sesión", style="TButton",
+                                                 command=self.login)
+        self.verify_username_button.grid(row=2, column=1, columnspan=2, pady=10, sticky="ew")
 
-        self.forgot_password_button = ttk.Button(self.login_password_frame, text="Forgot Password?", style="TButton",
+        self.forgot_password_button = ttk.Button(self.login_username_frame, text="Olvido contraseña?", style="TButton",
                                                  command=self.show_recover_password)
-        self.forgot_password_button.grid(row=2, column=1, columnspan=2, pady=10, sticky="ew")
+        self.forgot_password_button.grid(row=3, column=1, columnspan=2, pady=10, sticky="ew")
 
-        self.back_button = ttk.Button(self.login_password_frame, text="Back", style="TButton",
-                                      command=lambda: self.show_frame(self.login_username_frame))
-        self.back_button.grid(row=3, column=1, columnspan=2, pady=10, sticky="ew")
+        self.back_button = ttk.Button(self.login_username_frame, text="Atras", style="TButton",
+                                      command=lambda: self.show_frame(self.main_frame))
+        self.back_button.grid(row=4, column=1, columnspan=2, pady=10, sticky="ew")
 
     def show_password_widgets(self):
         self.password_label.grid(row=0, column=1, padx=5, pady=5)
@@ -179,7 +161,7 @@ class UserApp:
         self.forgot_password_button.grid_forget()
 
     def create_register_frame(self):
-        self.username_label = ttk.Label(self.register_frame, text="Username")
+        self.username_label = ttk.Label(self.register_frame, text="Usuario")
         self.username_label.grid(row=0, column=1, padx=5, pady=5)
         self.username_entry_register = ttk.Entry(self.register_frame)
         self.username_entry_register.grid(row=0, column=2, padx=5, pady=5)
@@ -189,48 +171,48 @@ class UserApp:
         self.email_entry = ttk.Entry(self.register_frame)
         self.email_entry.grid(row=1, column=2, padx=5, pady=5)
 
-        self.password_label = ttk.Label(self.register_frame, text="Password")
+        self.password_label = ttk.Label(self.register_frame, text="Contraseña")
         self.password_label.grid(row=2, column=1, padx=5, pady=5)
         self.password_entry_register = ttk.Entry(self.register_frame, show="*")
         self.password_entry_register.grid(row=2, column=2, padx=5, pady=5)
 
-        self.show_password_button = ttk.Button(self.register_frame, text="Show Password",
+        self.show_password_button = ttk.Button(self.register_frame, text="Mostrar Contraseña",
                                                command=lambda: self.toggle_password_visibility(
                                                    self.password_entry_register,
                                                    self.show_password_button))
         self.show_password_button.grid(row=2, column=3, padx=5, pady=5)
 
-        self.repeat_password_label = ttk.Label(self.register_frame, text="Repeat Password")
+        self.repeat_password_label = ttk.Label(self.register_frame, text="Repetir Contraseña")
         self.repeat_password_label.grid(row=3, column=1, padx=5, pady=5)
         self.repeat_password_entry_register = ttk.Entry(self.register_frame, show="*")
         self.repeat_password_entry_register.grid(row=3, column=2, padx=5, pady=5)
 
-        self.show_repeat_password_button = ttk.Button(self.register_frame, text="Show Password",
+        self.show_repeat_password_button = ttk.Button(self.register_frame, text="Mostrar Contraseña",
                                                       command=lambda: self.toggle_password_visibility(
                                                           self.repeat_password_entry_register,
                                                           self.show_repeat_password_button))
         self.show_repeat_password_button.grid(row=3, column=3, padx=5, pady=5)
 
-        self.phone_label = ttk.Label(self.register_frame, text="Phone")
+        self.phone_label = ttk.Label(self.register_frame, text="Movil")
         self.phone_label.grid(row=4, column=1, padx=5, pady=5)
         self.phone_entry = ttk.Entry(self.register_frame)
         self.phone_entry.grid(row=4, column=2, padx=5, pady=5)
 
-        self.gender_label = ttk.Label(self.register_frame, text="Gender")
+        self.gender_label = ttk.Label(self.register_frame, text="Genero")
         self.gender_label.grid(row=5, column=1, padx=5, pady=5)
-        self.gender_combobox = ttk.Combobox(self.register_frame, values=["Male", "Female", "Other", "I'd rather not say"], state="readonly")
+        self.gender_combobox = ttk.Combobox(self.register_frame, values=["Hombre", "Mujer", "Otro", "Prefiero no decirlo"], state="readonly")
         self.gender_combobox.grid(row=5, column=2, padx=5, pady=5)
 
-        self.address_label = ttk.Label(self.register_frame, text="Address")
+        self.address_label = ttk.Label(self.register_frame, text="Dirección")
         self.address_label.grid(row=6, column=1, padx=5, pady=5)
         self.address_entry = ttk.Entry(self.register_frame)
         self.address_entry.grid(row=6, column=2, padx=5, pady=5)
 
-        self.register_button = ttk.Button(self.register_frame, text="Register",
+        self.register_button = ttk.Button(self.register_frame, text="Registro",
                                           command=self.register)
         self.register_button.grid(row=7, column=1, columnspan=3, pady=10, sticky="ew")
 
-        self.back_button = ttk.Button(self.register_frame, text="Back",
+        self.back_button = ttk.Button(self.register_frame, text="Atras",
                                       command=lambda: self.show_frame(self.main_frame))
         self.back_button.grid(row=8, column=1, columnspan=3, pady=10, sticky="ew")
 
@@ -244,26 +226,26 @@ class UserApp:
 
         self.email_label_recover = ttk.Label(self.recover_frame, text="Email")
         self.email_entry_recover = ttk.Entry(self.recover_frame)
-        self.send_code_button = ttk.Button(self.recover_frame, text="Send Code",
+        self.send_code_button = ttk.Button(self.recover_frame, text="Enviar Código de Verificación",
                                            command=self.send_verification_code)
 
-        self.code_label = ttk.Label(self.recover_frame, text="Verification Code")
+        self.code_label = ttk.Label(self.recover_frame, text="Codigo de Verificación")
         self.code_entry = ttk.Entry(self.recover_frame)
-        self.new_password_label = ttk.Label(self.recover_frame, text="New Password")
+        self.new_password_label = ttk.Label(self.recover_frame, text="Nueva Contraseña")
         self.new_password_entry = ttk.Entry(self.recover_frame, show="*")
-        self.show_new_password_button = ttk.Button(self.recover_frame, text="Show Password",
+        self.show_new_password_button = ttk.Button(self.recover_frame, text="Mostrar Contraseña",
                                                    command=lambda: self.toggle_password_visibility(
                                                        self.new_password_entry,
                                                        self.show_new_password_button))
-        self.new_repeat_password_label = ttk.Label(self.recover_frame, text="Repeat New Password")
+        self.new_repeat_password_label = ttk.Label(self.recover_frame, text="Repertir Nueva Contraseña")
         self.new_repeat_password_entry = ttk.Entry(self.recover_frame, show="*")
-        self.show_new_repeat_password_button = ttk.Button(self.recover_frame, text="Show Password",
+        self.show_new_repeat_password_button = ttk.Button(self.recover_frame, text="Mostrar Contraseña",
                                                           command=lambda: self.toggle_password_visibility(
                                                               self.new_repeat_password_entry,
                                                               self.show_new_repeat_password_button))
-        self.verify_code_button = ttk.Button(self.recover_frame, text="Verify and Change Password",
+        self.verify_code_button = ttk.Button(self.recover_frame, text="Verificar Código y Cambiar Contraseña",
                                              command=self.verify_code_and_change_password)
-        self.back_button_recover = ttk.Button(self.recover_frame, text="Back",
+        self.back_button_recover = ttk.Button(self.recover_frame, text="Atras",
                                               command=lambda: self.show_frame(self.main_frame))
 
     def show_recover_password(self):
@@ -302,21 +284,21 @@ class UserApp:
         self.verify_code_button.grid_forget()
 
     def create_song_frame(self):
-        self.song_label = ttk.Label(self.song_frame, text="Song Name")
+        self.song_label = ttk.Label(self.song_frame, text="Nombre de la Canción")
         self.song_label.pack()
         self.song_entry = ttk.Entry(self.song_frame)
         self.song_entry.pack()
 
-        self.author_label = ttk.Label(self.song_frame, text="Author/Group")
+        self.author_label = ttk.Label(self.song_frame, text="Cante/Grupo")
         self.author_label.pack()
         self.author_entry = ttk.Entry(self.song_frame)
         self.author_entry.pack()
 
-        self.insert_song = ttk.Button(self.song_frame, text="Register Song",
+        self.insert_song = ttk.Button(self.song_frame, text="Cancio Registrada",
                                       command=self.insert_song)
         self.insert_song.pack()
 
-        self.back_button = ttk.Button(self.song_frame, text="Back",
+        self.back_button = ttk.Button(self.song_frame, text="Atras",
                                       command=lambda: self.show_frame(self.post_login_frame))
         self.back_button.pack()
 
@@ -325,15 +307,15 @@ class UserApp:
         self.post_login_frame.grid_columnconfigure(0, weight=1)
         self.post_login_frame.grid_columnconfigure(4, weight=1)
 
-        self.insert_song_button = ttk.Button(self.post_login_frame, text="Insert Song",
+        self.insert_song_button = ttk.Button(self.post_login_frame, text="Insertar Canción",
                                              command=lambda: self.show_frame(self.song_frame))
         self.insert_song_button.grid(row=0, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
-        self.view_songs_button = ttk.Button(self.post_login_frame, text="View Songs",
+        self.view_songs_button = ttk.Button(self.post_login_frame, text="Ver Canciones",
                                             command=self.view_songs)
         self.view_songs_button.grid(row=1, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
-        self.logout_button = ttk.Button(self.post_login_frame, text="Logout",
+        self.logout_button = ttk.Button(self.post_login_frame, text="Cerrar Sesión",
                                         command=lambda: self.show_frame(self.main_frame))
         self.logout_button.grid(row=2, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
@@ -345,14 +327,14 @@ class UserApp:
         self.view_songs_frame.grid_columnconfigure(3, weight=1)
         self.view_songs_frame.grid_columnconfigure(4, weight=1)
 
-        self.songs_treeview = ttk.Treeview(self.view_songs_frame, columns=("Song", "Author"), show="headings")
-        self.songs_treeview.heading("Song", text="Song")
-        self.songs_treeview.heading("Author", text="Author")
-        self.songs_treeview.column("Song", anchor="center")
-        self.songs_treeview.column("Author", anchor="center")
+        self.songs_treeview = ttk.Treeview(self.view_songs_frame, columns=("Cancion", "Autor"), show="headings")
+        self.songs_treeview.heading("Cancion", text="Cancion")
+        self.songs_treeview.heading("Autor", text="Autor")
+        self.songs_treeview.column("Cancion", anchor="center")
+        self.songs_treeview.column("Autor", anchor="center")
         self.songs_treeview.grid(row=0, column=1, columnspan=3, padx=20, pady=20, sticky="ew")
 
-        self.back_button = ttk.Button(self.view_songs_frame, text="Back",
+        self.back_button = ttk.Button(self.view_songs_frame, text="Atras",
                                       command=lambda: self.show_frame(self.post_login_frame))
         self.back_button.grid(row=1, column=2, padx=20, pady=20, sticky="ew")
 
@@ -363,33 +345,20 @@ class UserApp:
         username = self.username_entry_login.get()
         password = self.password_entry_login.get()
 
-        if not validate_username(username):
-            return
-
         result = authenticate_user(username)
         if result:
             stored_password, salt = result
             if verify_password(stored_password, password, salt):
-                messagebox.showinfo("Login", "Login successful!")
+                messagebox.showinfo("Inicio de sesión", "Inicio de sesión exitoso")
                 self.current_user = username
                 self.current_password = password
                 self.current_salt = salt
                 self.show_frame(self.post_login_frame)  # Show the new frame
             else:
-                messagebox.showerror("Login", "Invalid password")
+                messagebox.showerror("Inicio de sesión", "Nombre de usuario o contraseña incorrectos")
         else:
-            messagebox.showerror("Login", "Invalid username or password")
+            messagebox.showerror("Inicio de sesión", "Nombre de usuario o contraseña incorrectos")
 
-    def verify_username(self):
-        username = self.username_entry_login.get()
-
-        if not validate_username(username):
-            return
-        result = authenticate_user(username)
-        if result:
-            self.show_frame(self.login_password_frame)
-        else:
-            messagebox.showerror("Login", "Username does not exist")
 
     def register(self):
         username = self.username_entry_register.get()
@@ -401,7 +370,7 @@ class UserApp:
         address = self.address_entry.get()
 
         if not all([username, email, password, repeat_password, phone, gender, address]):
-            messagebox.showerror("Register", "All fields are required")
+            messagebox.showerror("Registro", "Todos los campos son obligatorios")
             return
 
         if not validate_username(username) or not validate_password(password,
@@ -410,53 +379,51 @@ class UserApp:
             return
 
         salt = generate_salt()
-        print(salt)
         hashed_password, salt = hash_password(password, salt)
         if register_user(username, email, hashed_password, salt, phone, gender, address):
-            messagebox.showinfo("Register", "You have registered successfully")
+            messagebox.showinfo("Registro", "Usuario registrado exitosamente")
             self.show_frame(self.login_username_frame)
         else:
-            messagebox.showerror("Register", "Username, email, or phone already exists")
+            messagebox.showerror("Registro", "Usuario, email o movil ya registrados")
 
     def insert_song(self):
         song_name = self.song_entry.get()
         author_name = self.author_entry.get()
 
         if not song_name or not author_name:
-            messagebox.showerror("Register Song", "Song name and author/group cannot be empty.")
+            messagebox.showerror("Registrar Canción", "Por favor, ingrese el nombre de la canción y el autor")
             return
 
         user_id = get_user_id(self.current_user)  # Get the authenticated user's ID
 
         if user_id is None:
-            messagebox.showerror("Register Song", "User ID not found")
+            messagebox.showerror("Registrar Canción", "Id de usuario no encontrado")
             return
 
         try:
             if not register_song(user_id, song_name, author_name, self.current_password, self.current_salt):
-                raise ValueError("Song already exists")
-            messagebox.showinfo("Register Song", "Song registered successfully.")
+                raise ValueError("Error al registrar la canción")
+            messagebox.showinfo("Registrar Canción", "Canción registrada exitosamente")
             # Clear the fields after registering
             self.song_entry.delete(0, tk.END)
             self.author_entry.delete(0, tk.END)
         except ValueError as e:
-            messagebox.showerror("Register Song", str(e))
+            messagebox.showerror("Registrar Canción", str(e))
 
     def play_random_song(self):
         user_id = get_user_id(self.current_user)
         if user_id is None:
-            messagebox.showerror("Play Song", "User ID not found")
+            messagebox.showerror("Escuchar Canción", "Id de usuario no encontrado")
             return
 
-        conn = create_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?',
-                       (user_id,))
-        songs = cursor.fetchall()
-        conn.close()
+        try:
+            songs = get_songs_by_user(user_id)
+        except Exception as e:
+            messagebox.showerror("Escuchar Canción", f"Error al encontar cancion: {e}")
+            return
 
         if self.current_user is not None and not songs:
-            messagebox.showerror("Play Song", "No songs found")
+            messagebox.showerror("Escuchar Canción", "Canccion no encontrada")
             return
 
         song = random.choice(songs)
@@ -466,45 +433,41 @@ class UserApp:
             key = derive_key(self.current_password, self.current_salt)
             song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
             author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
-            messagebox.showinfo("Play Song", f"Playing '{song_name}' by '{author_name}'")
+            messagebox.showinfo("Escuchar Canción", f"Escuchando '{song_name}' de '{author_name}'")
         except Exception as e:
-            messagebox.showerror("Play Song", f"Error decrypting song: {e}")
+            messagebox.showerror("Escuchar Canción", f"Error al desencriptar cancion: {e}")
 
 
     def toggle_password_visibility(self, entry, button):
         if entry.cget('show') == '*':
             entry.config(show='')
-            button.config(text='Hide Password')
+            button.config(text='Esconder contraseña')
         else:
             entry.config(show='*')
-            button.config(text='Show Password')
+            button.config(text='Mostrar contraseña')
         
 
     def send_verification_code(self):
         email = self.email_entry_recover.get()
         if not email:
-            messagebox.showerror("Error", "Please enter your email")
+            messagebox.showerror("Error", "Por favor, ingrese su correo electrónico")
             return
 
-        # Retrieve the registered email for the current user from the database
-        conn = create_connection()
-        cursor = conn.cursor()
-        user_id = self.username_entry_login.get()
-        print(user_id)
-        cursor.execute("SELECT email FROM users WHERE username = ?", (user_id,))
-        result = cursor.fetchone()
-        print(result)
-        conn.close()
+        try:
+            result = verify_email_recovery(email)
+        except Exception as e:
+            messagebox.showerror("Error", f"Fallo al obtener email: {e}")
+            return
 
         if result is None:
-            messagebox.showerror("Error", "User not found")
+            messagebox.showerror("Error", "Usuario no encontrado")
             return
 
         registered_email = result[0]
 
         # Check if the entered email matches the registered email
         if email != registered_email:
-            messagebox.showerror("Error", "The entered email does not match the registered email")
+            messagebox.showerror("Error", "El correo electrónico no coincide con el registrado")
             return
 
         # Generate a random verification code
@@ -520,10 +483,10 @@ class UserApp:
 
             # Create the email message
             msg = EmailMessage()
-            msg['Subject'] = 'Verification Code'
+            msg['Subject'] = 'Codigo de verificacion'
             msg['From'] = sender_email
             msg['To'] = email
-            msg.set_content(f"Your verification code is: {self.verification_code}")
+            msg.set_content(f"Tu codigo de verificacion es: {self.verification_code}")
 
             # Send the email
             with smtplib.SMTP(smtp_server, smtp_port) as server:
@@ -531,39 +494,54 @@ class UserApp:
                 server.login(sender_email, sender_password)
                 server.send_message(msg)
 
-            messagebox.showinfo("Success", "Verification code sent to your email")
+            messagebox.showinfo("Exitoso", "Codigo de verificacion enviado")
             self.hide_email_widgets()
             self.show_verification_widgets()
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to send email: {e}")
+            messagebox.showerror("Error", f"Error al enviar email: {e}")
 
     def verify_code_and_change_password(self):
         entered_code = self.code_entry.get()
         new_password = self.new_password_entry.get()
         new_repeat_password = self.new_repeat_password_entry.get()
-        print(new_password, new_repeat_password)
 
         if entered_code != self.verification_code:
-            messagebox.showerror("Error", "Invalid verification code")
+            messagebox.showerror("Error", "Codigo de verificacion incorrecto")
             return
 
         if not new_password or not new_repeat_password:
-            messagebox.showerror("Error", "Please enter a new password")
+            messagebox.showerror("Error", "Por favor, ingrese su nueva contraseña")
             return
 
         if new_password != new_repeat_password:
-            messagebox.showerror("Error", "Passwords do not match")
+            messagebox.showerror("Error", "Contraseñas no coinciden")
             return
 
-        # Update the password in the database
+        # Delete all songs for the user
         email = self.email_entry_recover.get()
+        if not email:
+            messagebox.showerror("Error", "Por favor, ingrese su correo electrónico")
+            return
+        user_id = get_user_by_email(email)
+        if user_id is None:
+            messagebox.showerror("Error", "Usuario no encontrado")
+            return
+
+        try:
+            delete_songs_by_user_id(user_id)
+        except Exception as e:
+            messagebox.showerror("Error", f"Error al borrar canciones: {e}")
+            return
+
+        # Update the password
         salt = generate_salt()
         hashed_password, salt = hash_password(new_password, salt)
-        if update_password(email, hashed_password, salt):
-            messagebox.showinfo("Success", "Password changed successfully")
-            self.show_frame(self.login_password_frame)
+        if update_password(user_id, hashed_password, salt):
+            messagebox.showinfo("Exitoso", "Contraseña cambiada exitosamente")
+            self.current_password = new_password
+            self.show_frame(self.login_username_frame)
         else:
-            messagebox.showerror("Error", "Failed to change password")
+            messagebox.showerror("Error", "Error al cambiar la contraseña")
 
     def view_songs(self):
         for item in self.songs_treeview.get_children():
@@ -572,15 +550,10 @@ class UserApp:
         # Fetch songs from the database
         user_id = get_user_id(self.current_user)
         if user_id is None:
-            messagebox.showerror("View Songs", "User ID not found")
+            messagebox.showerror("View Songs", "Id de usuario no encontrado")
             return
 
-        conn = create_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?",
-                       (user_id,))
-        songs = cursor.fetchall()
-        conn.close()
+        songs = get_songs_by_user(user_id)
 
         # Decrypt and insert songs into the treeview
         for encrypted_song_name, encrypted_author_name, nonce in songs:
@@ -590,23 +563,14 @@ class UserApp:
                 author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
                 self.songs_treeview.insert("", "end", values=(song_name, author_name))
             except InvalidTag as e:
-                messagebox.showerror("View Songs", f"Error decrypting song: {e}")
+                messagebox.showerror("Ver canciones", f"Error desencriptando canciones: {e}")
 
         self.show_frame(self.view_songs_frame)
 
 
-def update_password(email, hashed_password, salt):
-    print(f"Updating password for email: {email}")
-    print(f"Hashed Password: {hashed_password}")
-    print(f"Salt: {salt}")
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET hashed_password = ?, salt = ? WHERE email = ?",
-                   (hashed_password, salt, email))
-    conn.commit()
-    conn.close()
-    print(f"Rows affected: {cursor.rowcount}")
-    return cursor.rowcount > 0
+
+
+
 
 
 

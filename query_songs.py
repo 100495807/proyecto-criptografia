@@ -1,20 +1,7 @@
-import sqlite3
 import os
 from security import encrypt_aes_gcm, decrypt_aes_gcm, derive_key, create_connection
 
-def create_songs_table():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS songs (
-        id INTEGER PRIMARY KEY,
-        user_id INTEGER,
-        encrypted_song_name BLOB NOT NULL,
-        encrypted_author_name BLOB NOT NULL,
-        nonce BLOB NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id)
-    )''')
-    conn.commit()
-    conn.close()
+
 
 def register_song(user_id, song_name, author_name, password, salt):
     conn = create_connection()
@@ -48,6 +35,7 @@ def register_song(user_id, song_name, author_name, password, salt):
     conn.close()
     return True
 
+
 def get_encrypted_song(user_id, encrypted_song_name):
     """Recupera la canción cifrada por el nombre del usuario y el nombre de la canción."""
     conn = create_connection()
@@ -61,3 +49,30 @@ def get_encrypted_song(user_id, encrypted_song_name):
     else:
         print(f"DEBUG: No se encontró la canción cifrada '{encrypted_song_name}' para el usuario ID {user_id}.")
     return result if result else None
+
+
+def get_songs_by_user(user_id):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?', (user_id,))
+    songs = cursor.fetchall()
+    conn.close()
+    return songs
+
+
+def get_songs(user_id, password, salt):
+    """Recupera y descifra las canciones del usuario."""
+    # Obtiene las canciones del usuario desde la base de datos
+    key = derive_key(password, salt)
+    songs = get_songs_by_user(user_id)
+
+    decrypted_songs = []
+    for encrypted_song_name, encrypted_author_name, nonce in songs:
+        if encrypted_song_name and encrypted_author_name and key:
+            song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
+            author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
+            decrypted_songs.append({'Canción': song_name, 'autor': author_name})
+            print(f"DEBUG: Canción '{song_name}' de '{author_name}' descifrada.")
+        else:
+            print("DEBUG: Error al descifrar la canción.")
+    return decrypted_songs

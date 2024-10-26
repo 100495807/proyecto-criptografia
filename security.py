@@ -1,12 +1,12 @@
 import os
 import sqlite3
-
+import base64
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidKey, InvalidTag
-import base64
+
 
 def create_connection():
     base_dir = os.path.dirname(__file__)
@@ -26,9 +26,7 @@ def hash_password(password, salt):
         backend=default_backend()
     )
     hashed_password = kdf.derive(password.encode())
-    encoded_hashed_password = base64.b64encode(hashed_password).decode('utf-8')
-    encoded_salt = base64.b64encode(salt).decode('utf-8')
-    return encoded_hashed_password, encoded_salt
+    return hashed_password, salt
 
 def verify_password(stored_password, provided_password, salt):
     kdf = PBKDF2HMAC(
