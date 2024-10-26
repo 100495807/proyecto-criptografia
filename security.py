@@ -1,10 +1,18 @@
 import os
+import sqlite3
+
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidKey, InvalidTag
 import base64
+
+def create_connection():
+    base_dir = os.path.dirname(__file__)
+    db_path = os.path.join(base_dir, 'database.db')
+    conn = sqlite3.connect(db_path)
+    return conn
 
 def generate_salt():
     return os.urandom(16)
@@ -31,9 +39,8 @@ def verify_password(stored_password, provided_password, salt):
         backend=default_backend()
     )
     try:
-        print("Almacenada:", stored_password, "nueva", provided_password, "salt", salt)
+        print("Contraseña almacenada:", stored_password, "salt", salt)
         kdf.verify(provided_password.encode(), stored_password)
-
         return True
     except InvalidKey:
         return False

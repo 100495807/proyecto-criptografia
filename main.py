@@ -4,8 +4,9 @@ import tkinter as tk
 import re
 from tkinter import messagebox
 from tkinter import ttk
-from database import create_users_table, register_user, authenticate_user, register_song, get_user_id, \
-    create_connection, create_songs_table, delete_all_tables, create_all_tables
+from users import create_users_table, register_user, authenticate_user, get_user_id, \
+    create_connection, create_songs_table, create_all_tables
+from songs import register_song
 from security import hash_password, verify_password, generate_key, encrypt_aes_gcm, generate_salt, \
     decrypt_aes_gcm, derive_key
 import smtplib
@@ -13,6 +14,8 @@ import random
 import string
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
+
+from validation import validate_username, validate_password, validate_phone, validate_email
 
 
 class UserApp:
@@ -359,6 +362,10 @@ class UserApp:
     def login(self):
         username = self.username_entry_login.get()
         password = self.password_entry_login.get()
+
+        if not validate_username(username):
+            return
+
         result = authenticate_user(username)
         if result:
             stored_password, salt = result
@@ -375,6 +382,9 @@ class UserApp:
 
     def verify_username(self):
         username = self.username_entry_login.get()
+
+        if not validate_username(username):
+            return
         result = authenticate_user(username)
         if result:
             self.show_frame(self.login_password_frame)
@@ -390,37 +400,15 @@ class UserApp:
         gender = self.gender_combobox.get()
         address = self.address_entry.get()
 
-        '''if not username or not email or not password or not repeat_password or not phone or not gender or not address:
+        if not all([username, email, password, repeat_password, phone, gender, address]):
             messagebox.showerror("Register", "All fields are required")
             return
 
-        if len(username) < 3 or len(username) > 20 or not re.match(r"^\w+$", username):
-            messagebox.showerror("Register", "Invalid username")
+        if not validate_username(username) or not validate_password(password,
+                                                                    repeat_password) or not validate_email(
+                email) or not validate_phone(phone):
             return
 
-        if password != repeat_password:
-            messagebox.showerror("Register", "Passwords do not match")
-            return
-
-        if len(password) < 9 or not re.search(r"[A-Z]", password) or not re.search(r"[a-z]",
-                                                                                   password) or not re.search(
-            r"[0-9]", password) or not re.search(r"[!@#$%^&*()]", password):
-            messagebox.showerror("Register",
-                                 "Password must be at least 9 characters long and contain an "
-                                 "uppercase letter, a lowercase letter, a number, and a special "
-                                 "character")
-            return
-
-        email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-        if not re.match(email_pattern, email):
-            messagebox.showerror("Register", "Invalid email format")
-            return
-
-        number_pattern = r"^[0-9]+$"
-        if not re.match(number_pattern, phone):
-            messagebox.showerror("Register", "Invalid phone number")
-            return
-'''
         salt = generate_salt()
         print(salt)
         hashed_password, salt = hash_password(password, salt)

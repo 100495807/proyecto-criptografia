@@ -1,14 +1,7 @@
 import sqlite3
 import os
 from security import encrypt_aes_gcm, decrypt_aes_gcm, generate_key, derive_key
-
-
-def create_connection():
-    base_dir = os.path.dirname(__file__)
-    db_path = os.path.join(base_dir, 'database.db')
-    conn = sqlite3.connect(db_path)
-    return conn
-
+import base64
 
 def create_users_table():
     conn = create_connection()
@@ -41,11 +34,7 @@ def create_songs_table():
     conn.commit()
     conn.close()
 
-def create_all_tables():
-    create_users_table()
-    create_songs_table()
 
-import base64
 
 def register_user(username, email, hashed_password, salt, phone, gender, address):
     conn = create_connection()
@@ -71,13 +60,10 @@ def register_user(username, email, hashed_password, salt, phone, gender, address
 
 
 def authenticate_user(username):
-    print("usuario",username)
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT hashed_password, salt FROM users WHERE username = ?', (username,))
     result = cursor.fetchone()
-    print(f"Query executed: SELECT hashed_password, salt FROM users WHERE username = {username}")
-    print(f"Result: {result}")
     conn.close()
     if result:
         stored_password, salt = result
@@ -92,16 +78,6 @@ def get_user_id(username):
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
-
-
-def delete_user(username):
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('DELETE FROM users WHERE username = ?', (username,))
-    conn.commit()
-    conn.close()
-    print(f"User '{username}' deleted successfully.")
-
 
 def register_song(user_id, song_name, author_name, password, salt):
     conn = create_connection()
@@ -142,40 +118,6 @@ def get_songs_by_user(user_id):
     songs = cursor.fetchall()
     conn.close()
     return songs
-
-def get_all_users():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT name FROM sqlite_master WHERE type="table" AND name="users";')
-    table_exists = cursor.fetchone()
-    if table_exists:
-        cursor.execute('SELECT * FROM users')
-        users = cursor.fetchall()
-        conn.close()
-        return users
-    else:
-        print("La tabla 'users' no existe.")
-        return []
-
-def delete_all_users():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('DROP TABLE users')
-    conn.commit()
-    conn.close()
-    print("Tabla 'users' eliminada correctamente.")
-
-def delete_all_songs():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('DROP TABLE songs')
-    conn.commit()
-    conn.close()
-    print("Tabla 'songs' eliminada correctamente.")
-
-def delete_all_tables():
-    delete_all_users()
-    delete_all_songs()
 
 def get_songs(user_id, password, salt):
     """Recupera y descifra las canciones del usuario."""
