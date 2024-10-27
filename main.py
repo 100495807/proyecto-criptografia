@@ -83,7 +83,7 @@ class UserApp:
         self.song_frame.pack_forget()
         self.recover_frame.pack_forget()
         self.post_login_frame.pack_forget()
-        self.view_songs_frame.pack_forget()  # Ensure this frame is also forgotten
+        self.view_songs_frame.pack_forget()
 
         if frame == self.recover_frame:
             self.show_email_widgets()
@@ -588,67 +588,6 @@ class UserApp:
                                      f"Error desencriptando canciones: {e}")
 
         self.show_frame(self.view_songs_frame)
-
-
-"""def test_aes_gcm_with_db(user_id, password, salt):
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ?', (user_id,))
-    song = cursor.fetchone()
-    conn.close()
-
-    if not song:
-        print("No songs found for the user.")
-        return
-
-    encrypted_song_name, nonce = song
-    key = derive_key(password, salt)
-
-    # Decrypt the song
-    decrypted_song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
-    print(f"Decrypted Song: {decrypted_song_name}")
-
-    # Encrypt the song again
-    re_encrypted_song_name = encrypt_aes_gcm(decrypted_song_name, key, nonce)
-    print(f"Re-encrypted Song: {re_encrypted_song_name}")
-
-    # Verify if the re-encrypted song matches the original encrypted song
-    assert re_encrypted_song_name == encrypted_song_name, "Error: The re-encrypted song does not match the original."
-    print("Encryption and decryption successful.")
-
-def test_authentication_failure_with_db(user_id, password, salt):
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ?', (user_id,))
-    song = cursor.fetchone()
-    conn.close()
-
-    if not song:
-        print("No songs found for the user.")
-        return
-
-    encrypted_song_name, nonce = song
-    key = derive_key(password, salt)
-
-    # Modify the encrypted song to simulate an authentication failure
-    modified_encrypted_song_name = encrypted_song_name[:16] + "XXXXXX" + encrypted_song_name[22:]
-
-    try:
-        print("Attempting to decrypt the modified song...")
-        decrypted_song_name = decrypt_aes_gcm(modified_encrypted_song_name, key, nonce)
-        print(f"Decrypted Song: {decrypted_song_name}")
-    except InvalidTag as e:
-        print(f"Expected error (InvalidTag): {str(e)}")
-    except Exception as e:
-        print(f"Other error: {str(e)}")
-
-# Example usage
-user_id = "jorge"
-password = "a"
-salt = "kV2YlrkB/XTphc2zNRLqtw=="  # This should be the actual salt used for the user
-
-test_aes_gcm_with_db(user_id, password, salt)
-test_authentication_failure_with_db(user_id, password, salt)"""
 
 if __name__ == "__main__":
     create_all_tables()

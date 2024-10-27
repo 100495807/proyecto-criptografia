@@ -14,7 +14,8 @@ def register_user(username, email, hashed_password, salt, phone, gender, address
     cursor.execute(
         'INSERT INTO users (username, email, hashed_password, salt, phone, gender, address) '
         'VALUES (?, ?, ?, ?, ?, ?, ?)',
-        (username, email, sqlite3.Binary(hashed_password), sqlite3.Binary(salt), phone, gender, address))
+        (username, email, sqlite3.Binary(hashed_password), sqlite3.Binary(salt), phone, gender,
+         address))
     conn.commit()
     conn.close()
     print(f"Usuario registrado: {username}, Contraseña Hasheada: {hashed_password}, Salt: {salt}")

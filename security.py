@@ -67,7 +67,9 @@ def encrypt_aes_gcm(plain_text, key, nonce):
     tag = encryptor.tag
 
     print(f"Cifrado AES-GCM: Texto plano: '{plain_text}' | Clave: {len(key) * 8} bits | "
-          f"Etiqueta: {base64.b64encode(tag).decode()} | Texto cifrado: {base64.b64encode(cipher_text).decode()} | Nonce: {base64.b64encode(nonce).decode()}")
+          f"Etiqueta: {base64.b64encode(tag).decode()} | "
+          f"Texto cifrado: {base64.b64encode(cipher_text).decode()} | "
+          f"Nonce: {base64.b64encode(nonce).decode()}")
     return base64.b64encode(nonce + tag + cipher_text).decode('utf-8')
 
 def decrypt_aes_gcm(cipher_text_b64, key, nonce):

@@ -2,13 +2,13 @@ import os
 from security import encrypt_aes_gcm, decrypt_aes_gcm, derive_key, create_connection
 
 
-
 def register_song(user_id, song_name, author_name, password, salt):
     conn = create_connection()
     cursor = conn.cursor()
 
     # Fetch all songs for the user
-    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE '
+                   'user_id = ?', (user_id,))
     songs = cursor.fetchall()
 
     key = derive_key(password, salt)
@@ -28,7 +28,8 @@ def register_song(user_id, song_name, author_name, password, salt):
 
     # Insert the new song
     cursor.execute(
-        'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce) VALUES (?, ?, ?, ?)',
+        'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce) VALUES ('
+        '?, ?, ?, ?)',
         (user_id, encrypted_song_name, encrypted_author_name, nonce)
     )
     conn.commit()
@@ -40,21 +41,25 @@ def get_encrypted_song(user_id, encrypted_song_name):
     """Recupera la canción cifrada por el nombre del usuario y el nombre de la canción."""
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ? AND encrypted_song_name = ?',
+    cursor.execute('SELECT encrypted_song_name, nonce FROM songs WHERE user_id = ? AND '
+                   'encrypted_song_name = ?',
                    (user_id, encrypted_song_name))
     result = cursor.fetchone()
     conn.close()
     if result:
-        print(f"DEBUG: Canción cifrada '{encrypted_song_name}' recuperada para el usuario ID {user_id}.")
+        print(
+            f"DEBUG: Canción cifrada '{encrypted_song_name}' recuperada para el usuario ID {user_id}.")
     else:
-        print(f"DEBUG: No se encontró la canción cifrada '{encrypted_song_name}' para el usuario ID {user_id}.")
+        print(
+            f"DEBUG: No se encontró la canción cifrada '{encrypted_song_name}' para el usuario ID {user_id}.")
     return result if result else None
 
 
 def get_songs_by_user(user_id):
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE '
+                   'user_id = ?', (user_id,))
     songs = cursor.fetchall()
     conn.close()
     return songs
@@ -62,7 +67,6 @@ def get_songs_by_user(user_id):
 
 def get_songs(user_id, password, salt):
     """Recupera y descifra las canciones del usuario."""
-    # Obtiene las canciones del usuario desde la base de datos
     key = derive_key(password, salt)
     songs = get_songs_by_user(user_id)
 
