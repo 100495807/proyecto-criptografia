@@ -6,14 +6,14 @@ def register_song(user_id, song_name, author_name, password, salt):
     conn = create_connection()
     cursor = conn.cursor()
 
-    # Fetch all songs for the user
+    # Selecione todas las canciones del usuario
     cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE '
                    'user_id = ?', (user_id,))
     songs = cursor.fetchall()
 
     key = derive_key(password, salt)
 
-    # Decrypt all songs and check if the song already exists
+    # Descifrar las canciones y verificar si la canción ya existe
     for encrypted_song_name, encrypted_author_name, nonce in songs:
         decrypted_song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
         decrypted_author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
@@ -21,12 +21,12 @@ def register_song(user_id, song_name, author_name, password, salt):
             conn.close()
             return False  # Song already exists
 
-    # Encrypt the new song
+    # Encriptar el nombre de la canción y el nombre del autor
     nonce = os.urandom(12)
     encrypted_song_name = encrypt_aes_gcm(song_name, key, nonce)
     encrypted_author_name = encrypt_aes_gcm(author_name, key, nonce)
 
-    # Insert the new song
+    # Inserta la canción en la base de datos
     cursor.execute(
         'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce) VALUES ('
         '?, ?, ?, ?)',

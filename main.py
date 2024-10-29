@@ -413,7 +413,7 @@ class UserApp:
                                  "Por favor, ingrese el nombre de la canción y el autor")
             return
 
-        user_id = get_user_id(self.current_user)  # Get the authenticated user's ID
+        user_id = get_user_id(self.current_user)  # cogemos el id del usuario actual
 
         if user_id is None:
             messagebox.showerror("Registrar Canción", "Id de usuario no encontrado")
@@ -485,17 +485,17 @@ class UserApp:
 
         registered_email = result[0]
 
-        # Check if the entered email matches the registered email
+        # Chequear si el email introducido coincide con el registrado
         if email != registered_email:
             messagebox.showerror("Error",
                                  "El correo electrónico no coincide con el registrado")
             return
 
-        # Generate a random verification code
+        # Generar un código de verificación
         self.verification_code = ''.join(
             random.choices(string.ascii_uppercase + string.digits, k=6))
 
-        # Send the verification code to the user's email
+        #Enviar el código de verificación por email
         try:
             smtp_server = 'smtp.gmail.com'
             smtp_port = 587
@@ -538,7 +538,7 @@ class UserApp:
             messagebox.showerror("Error", "Las contraseñas no coinciden")
             return
 
-        # Delete all songs for the user
+        # Borramos las canciones del usuario
         email = self.email_entry_recover.get()
         if not email:
             messagebox.showerror("Error", "Por favor, ingrese su correo electrónico")
@@ -554,7 +554,7 @@ class UserApp:
             messagebox.showerror("Error", f"Error al borrar canciones: {e}")
             return
 
-        # Update the password
+        # Actualizamos la contraseña
         salt = generate_salt()
         hashed_password, salt = hash_password(new_password, salt)
         if update_password(user_id, hashed_password, salt):
@@ -568,7 +568,6 @@ class UserApp:
         for item in self.songs_treeview.get_children():
             self.songs_treeview.delete(item)  # Clear the treeview
 
-        # Fetch songs from the database
         user_id = get_user_id(self.current_user)
         if user_id is None:
             messagebox.showerror("View Songs", "Id de usuario no encontrado")
@@ -576,7 +575,7 @@ class UserApp:
 
         songs = get_songs_by_user(user_id)
 
-        # Decrypt and insert songs into the treeview
+        # Desciframos las canciones y las mostramos en el treeview
         for encrypted_song_name, encrypted_author_name, nonce in songs:
             try:
                 key = derive_key(self.current_password, self.current_salt)
@@ -590,7 +589,6 @@ class UserApp:
         self.show_frame(self.view_songs_frame)
 
 if __name__ == "__main__":
-    delete_all_tables()
     create_all_tables()
     root = tk.Tk()
     root.geometry("400x400")
