@@ -9,7 +9,7 @@ from query_users import register_user, authenticate_user, get_user_id, delete_so
 from query_songs import register_song, get_songs_by_user
 from security import hash_password, verify_password, generate_key, encrypt_aes_gcm, generate_salt, \
     decrypt_aes_gcm, derive_key
-from database import create_all_tables
+from database import create_all_tables, delete_all_tables
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
 from validation import validate_username, validate_password, validate_phone, validate_email
@@ -590,6 +590,7 @@ class UserApp:
         self.show_frame(self.view_songs_frame)
 
 if __name__ == "__main__":
+    delete_all_tables()
     create_all_tables()
     root = tk.Tk()
     root.geometry("400x400")
