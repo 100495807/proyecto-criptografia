@@ -497,9 +497,9 @@ class UserApp:
 
         # Send the verification code to the user's email
         try:
-            smtp_server = 'smtp.gmail.com'  # Replace with your SMTP server address
-            smtp_port = 587  # Replace with your SMTP server port
-            sender_email = 'SMTP_SENDER_EMAIL'  # Replace with your email address
+            smtp_server = 'smtp.gmail.com'
+            smtp_port = 587
+            sender_email = 'SMTP_SENDER_EMAIL'
             sender_password = 'SMTP_SENDER_PASSWORD'
 
             # Create the email message
