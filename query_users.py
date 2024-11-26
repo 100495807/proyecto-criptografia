@@ -1,8 +1,10 @@
 import sqlite3
-from security import create_connection
+from security import create_connection, generate_rsa_key_pair
 
 
 def register_user(username, email, hashed_password, salt, phone, gender, address):
+    private_key, public_key = generate_rsa_key_pair()
+
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT username FROM users WHERE username = ? OR email = ? OR phone = ?',
@@ -12,10 +14,10 @@ def register_user(username, email, hashed_password, salt, phone, gender, address
         return False
 
     cursor.execute(
-        'INSERT INTO users (username, email, hashed_password, salt, phone, gender, address) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO users (username, email, hashed_password, salt, phone, gender, address, private_key, public_key) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         (username, email, sqlite3.Binary(hashed_password), sqlite3.Binary(salt), phone, gender,
-         address))
+         address, private_key, public_key))
     conn.commit()
     conn.close()
     print(f"Usuario registrado: {username}, Contraseña Hasheada: {hashed_password}, Salt: {salt}")

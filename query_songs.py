@@ -6,31 +6,30 @@ def register_song(user_id, song_name, author_name, password, salt):
     conn = create_connection()
     cursor = conn.cursor()
 
-    # Selecione todas las canciones del usuario
-    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE '
-                   'user_id = ?', (user_id,))
+    # Seleccionar todas las canciones del usuario
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author FROM songs WHERE user_id = ?', (user_id,))
     songs = cursor.fetchall()
 
     key = derive_key(password, salt)
 
     # Descifrar las canciones y verificar si la canción ya existe
-    for encrypted_song_name, encrypted_author_name, nonce in songs:
-        decrypted_song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
-        decrypted_author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
+    for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author in songs:
+        decrypted_song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
+        decrypted_author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
         if decrypted_song_name == song_name and decrypted_author_name == author_name:
             conn.close()
-            return False  # Song already exists
+            return False  # La canción ya existe
 
     # Encriptar el nombre de la canción y el nombre del autor
-    nonce = os.urandom(12)
-    encrypted_song_name = encrypt_aes_gcm(song_name, key, nonce)
-    encrypted_author_name = encrypt_aes_gcm(author_name, key, nonce)
+    nonce_song = os.urandom(12)
+    nonce_author = os.urandom(12)
+    encrypted_song_name = encrypt_aes_gcm(song_name, key, nonce_song)
+    encrypted_author_name = encrypt_aes_gcm(author_name, key, nonce_author)
 
-    # Inserta la canción en la base de datos
+    # Insertar la canción en la base de datos
     cursor.execute(
-        'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce) VALUES ('
-        '?, ?, ?, ?)',
-        (user_id, encrypted_song_name, encrypted_author_name, nonce)
+        'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author) VALUES (?, ?, ?, ?, ?)',
+        (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author)
     )
     conn.commit()
     conn.close()
@@ -58,7 +57,7 @@ def get_encrypted_song(user_id, encrypted_song_name):
 def get_songs_by_user(user_id):
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce FROM songs WHERE '
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author FROM songs WHERE '
                    'user_id = ?', (user_id,))
     songs = cursor.fetchall()
     conn.close()
@@ -71,10 +70,10 @@ def get_songs(user_id, password, salt):
     songs = get_songs_by_user(user_id)
 
     decrypted_songs = []
-    for encrypted_song_name, encrypted_author_name, nonce in songs:
+    for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author in songs:
         if encrypted_song_name and encrypted_author_name and key:
-            song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce)
-            author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce)
+            song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
+            author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
             decrypted_songs.append({'Canción': song_name, 'autor': author_name})
             print(f"DEBUG: Canción '{song_name}' de '{author_name}' descifrada.")
         else:
