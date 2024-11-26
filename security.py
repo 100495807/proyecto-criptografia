@@ -108,13 +108,10 @@ def generate_rsa_key_pair():
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
 
-    print(f"Clave privada generada (RSA 2048 bits): {private_pem.decode()}")
-    print(f"Clave pública generada (RSA 2048 bits): {public_pem.decode()}")
-
     return private_pem, public_pem
 
 
-def sign_playlist(private_key_pem, playlist_data):
+def sign_comment(private_key_pem, comment):
     private_key = serialization.load_pem_private_key(
         private_key_pem,
         password=None,
@@ -122,7 +119,7 @@ def sign_playlist(private_key_pem, playlist_data):
     )
 
     signature = private_key.sign(
-        playlist_data.encode(),
+        comment.encode(),
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),
             salt_length=padding.PSS.MAX_LENGTH
@@ -130,30 +127,25 @@ def sign_playlist(private_key_pem, playlist_data):
         hashes.SHA256()
     )
 
-    print(f"Playlist firmada con RSA-PSS 2048 bits: {base64.b64encode(signature).decode()}")
-    return base64.b64encode(signature).decode()
+    return signature
 
 
-def verify_playlist_signature(public_key_pem, playlist_data, signature_b64):
+def verify_comment_signature(public_key_pem, comment, signature):
     public_key = serialization.load_pem_public_key(
         public_key_pem,
         backend=default_backend()
     )
 
-    signature = base64.b64decode(signature_b64)
-
     try:
         public_key.verify(
             signature,
-            playlist_data.encode(),
+            comment.encode(),
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
                 salt_length=padding.PSS.MAX_LENGTH
             ),
             hashes.SHA256()
         )
-        print("Firma verificada correctamente (RSA-PSS 2048 bits)")
         return True
     except InvalidSignature:
-        print("Firma inválida (RSA-PSS 2048 bits)")
         return False

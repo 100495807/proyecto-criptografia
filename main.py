@@ -1,22 +1,20 @@
-import os
 import smtplib
 import random
 import string
 import tkinter as tk
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox
 from tkinter import ttk
 
 from database import create_all_tables, delete_all_tables
-from query_playlists import get_private_key, insert_playlist, get_public_key, get_playlist
 from query_users import register_user, authenticate_user, get_user_id, delete_songs_by_user_id, \
-    verify_email_recovery, get_user_by_email, update_password
+    verify_email_recovery, get_user_by_email, update_password, get_username_by_id
 from query_songs import register_song, get_songs_by_user
-from security import hash_password, verify_password, generate_key, encrypt_aes_gcm, generate_salt, \
-    decrypt_aes_gcm, derive_key, create_connection, sign_playlist, verify_playlist_signature
+from security import hash_password, verify_password, generate_salt, \
+    decrypt_aes_gcm, derive_key, create_connection, generate_rsa_key_pair
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
 from validation import validate_username, validate_password, validate_phone, validate_email
-
+from query_comments import add_comment, get_comments, verify_comment
 
 class UserApp:
     def __init__(self, root):
@@ -61,7 +59,8 @@ class UserApp:
         self.recover_frame = ttk.Frame(root, style="TFrame")
         self.post_login_frame = ttk.Frame(root, style="TFrame")
         self.view_songs_frame = ttk.Frame(root, style="TFrame")
-        self.playlist_frame = ttk.Frame(root, style="TFrame")
+        self.comment_frame = ttk.Frame(root, style="TFrame")
+        self.view_comments_frame = ttk.Frame(root, style="TFrame")
 
         self.create_main_frame()
         self.create_login_username_frame()
@@ -70,7 +69,8 @@ class UserApp:
         self.create_recover_frame()
         self.create_post_login_frame()
         self.create_view_songs_frame()
-        self.create_playlist_frame()
+        self.create_comment_frame()
+        self.create_view_comments_frame()
 
         self.main_frame.pack(fill="both", expand=True)
         self.login_username_frame.pack(fill="both", expand=True)
@@ -90,6 +90,8 @@ class UserApp:
         self.recover_frame.pack_forget()
         self.post_login_frame.pack_forget()
         self.view_songs_frame.pack_forget()
+        self.comment_frame.pack_forget()
+        self.view_comments_frame.pack_forget()
 
         if frame == self.recover_frame:
             self.show_email_widgets()
@@ -333,13 +335,17 @@ class UserApp:
         self.view_songs_button = ttk.Button(self.post_login_frame, text="Ver Canciones", command=self.view_songs)
         self.view_songs_button.grid(row=1, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
+        self.comment_button = ttk.Button(self.post_login_frame, text="Agregar Comentario",
+                                            command=lambda: self.show_frame(self.comment_frame))
+        self.comment_button.grid(row=2, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+
+        self.view_comments_button = ttk.Button(self.post_login_frame, text="Ver Comentarios",
+                                               command=self.view_comments)
+        self.view_comments_button.grid(row=3, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+
         self.logout_button = ttk.Button(self.post_login_frame, text="Cerrar Sesión",
                                         command=lambda: self.show_frame(self.main_frame))
         self.logout_button.grid(row=5, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
-
-        self.manage_playlists_button = ttk.Button(self.post_login_frame, text="Gestionar Playlists",
-                                                  command=lambda: self.show_frame(self.playlist_frame))
-        self.manage_playlists_button.grid(row=2, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
 
     def create_view_songs_frame(self):
@@ -367,36 +373,50 @@ class UserApp:
                                            command=self.play_random_song)
         self.play_song_button.grid(row=1, column=1, padx=20, pady=20, sticky="ew")
 
-    def create_playlist_frame(self):
-        self.playlist_frame = ttk.Frame(self.root)
-        self.playlist_frame.grid_columnconfigure(0, weight=1)
-        self.playlist_frame.grid_columnconfigure(4, weight=1)
+    def create_comment_frame(self):
+        self.comment_frame = ttk.Frame(self.root)
+        self.comment_frame.grid_columnconfigure(0, weight=1)
+        self.comment_frame.grid_columnconfigure(4, weight=1)
 
-        self.playlist_name_label = ttk.Label(self.playlist_frame, text="Nombre de la Playlist")
-        self.playlist_name_label.grid(row=0, column=1, padx=5, pady=5)
-        self.playlist_name_entry = ttk.Entry(self.playlist_frame)
-        self.playlist_name_entry.grid(row=0, column=2, padx=5, pady=5)
+        self.song_id_label = ttk.Label(self.comment_frame, text="ID de la canción")
+        self.song_id_label.grid(row=0, column=1, padx=5, pady=5)
+        self.song_id_entry = ttk.Entry(self.comment_frame)
+        self.song_id_entry.grid(row=0, column=2, padx=5, pady=5)
 
-        self.song_ids_label = ttk.Label(self.playlist_frame, text="IDs de Canciones (separados por comas)")
-        self.song_ids_label.grid(row=1, column=1, padx=5, pady=5)
-        self.song_ids_entry = ttk.Entry(self.playlist_frame)
-        self.song_ids_entry.grid(row=1, column=2, padx=5, pady=5)
+        self.comment_label = ttk.Label(self.comment_frame, text="Comentario")
+        self.comment_label.grid(row=1, column=1, padx=5, pady=5)
+        self.comment_entry = ttk.Entry(self.comment_frame)
+        self.comment_entry.grid(row=1, column=2, padx=5, pady=5)
 
-        self.create_playlist_button = ttk.Button(self.playlist_frame, text="Crear Playlist",
-                                                 command=self.create_playlist_ui)
-        self.create_playlist_button.grid(row=2, column=1, columnspan=2, pady=10, sticky="ew")
+        self.add_comment_button = ttk.Button(self.comment_frame, text="Agregar comentario",
+                                             command=self.add_comment)
+        self.add_comment_button.grid(row=2, column=1, columnspan=2, pady=10, sticky="ew")
 
-        self.view_playlists_button = ttk.Button(self.playlist_frame, text="Ver Playlists", command=self.view_playlists)
-        self.view_playlists_button.grid(row=3, column=1, columnspan=2, pady=10, sticky="ew")
-
-        self.verify_playlist_button = ttk.Button(self.playlist_frame, text="Verificar Playlist",
-                                                 command=self.verify_playlist_ui)
-        self.verify_playlist_button.grid(row=4, column=1, columnspan=2, pady=10, sticky="ew")
-
-        self.back_button = ttk.Button(self.playlist_frame, text="Atrás",
+        self.back_button = ttk.Button(self.comment_frame, text="Atrás",
                                       command=lambda: self.show_frame(self.post_login_frame))
-        self.back_button.grid(row=5, column=1, columnspan=2, pady=10, sticky="ew")
+        self.back_button.grid(row=3, column=1, columnspan=2, pady=10, sticky="ew")
 
+    def create_view_comments_frame(self):
+        self.view_comments_frame = ttk.Frame(self.root)
+        self.view_comments_frame.grid_columnconfigure(0, weight=1)
+        self.view_comments_frame.grid_columnconfigure(1, weight=1)
+        self.view_comments_frame.grid_columnconfigure(2, weight=1)
+        self.view_comments_frame.grid_columnconfigure(3, weight=1)
+        self.view_comments_frame.grid_columnconfigure(4, weight=1)
+
+        self.comments_treeview = ttk.Treeview(self.view_comments_frame,
+                                              columns=("Usuario", "Comentario", "Firma Verificada"), show="headings")
+        self.comments_treeview.heading("Usuario", text="Usuario")
+        self.comments_treeview.heading("Comentario", text="Comentario")
+        self.comments_treeview.heading("Firma Verificada", text="Firma Verificada")
+        self.comments_treeview.column("Usuario", anchor="center")
+        self.comments_treeview.column("Comentario", anchor="center")
+        self.comments_treeview.column("Firma Verificada", anchor="center")
+        self.comments_treeview.grid(row=0, column=1, columnspan=3, padx=20, pady=20, sticky="ew")
+
+        self.back_button = ttk.Button(self.view_comments_frame, text="Atrás",
+                                      command=lambda: self.show_frame(self.post_login_frame))
+        self.back_button.grid(row=1, column=2, padx=20, pady=20, sticky="ew")
 
     def login(self):
         username = self.username_entry_login.get()
@@ -439,7 +459,11 @@ class UserApp:
 
         salt = generate_salt()
         hashed_password, salt = hash_password(password, salt)
-        if register_user(username, email, hashed_password, salt, phone, gender, address):
+
+        # Generar claves RSA
+        private_key, public_key = generate_rsa_key_pair()
+
+        if register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key):
             messagebox.showinfo("Registro", "Usuario registrado")
             self.show_frame(self.login_username_frame)
         else:
@@ -626,97 +650,55 @@ class UserApp:
 
         self.show_frame(self.view_songs_frame)
 
-    def create_playlist(self, user_id, playlist_name, song_ids):
-        private_key = get_private_key(user_id)
-        if not private_key:
-            print("Clave privada no encontrada")
-            return False
-
-        playlist_data = f"{playlist_name}|{user_id}|{','.join(map(str, song_ids))}"
-        signature = sign_playlist(private_key, playlist_data)
-        insert_playlist(user_id, playlist_name, song_ids, signature)
-        print(f"Playlist '{playlist_name}' creada y firmada")
-        return True
-
-    def verify_playlist(self, user_id, playlist_id):
-        public_key = get_public_key(user_id)
-        if not public_key:
-            print("Clave pública no encontrada")
-            return False
-
-        playlist = get_playlist(playlist_id)
-        if not playlist:
-            print("Playlist no encontrada")
-            return False
-
-        playlist_name, song_ids, signature = playlist
-        playlist_data = f"{playlist_name}|{user_id}|{song_ids}"
-        is_valid = verify_playlist_signature(public_key, playlist_data, signature)
-
-        if is_valid:
-            print("Firma de la playlist verificada correctamente")
-        else:
-            print("Firma de la playlist inválida")
-
-        return is_valid
-
-    def create_playlist_ui(self):
+    def add_comment(self):
+        song_id = self.song_id_entry.get()
+        comment = self.comment_entry.get()
         user_id = get_user_id(self.current_user)
         if user_id is None:
-            messagebox.showerror("Crear Playlist", "Id de usuario no encontrado")
+            messagebox.showerror("Agregar comentario", "Id de usuario no encontrado")
             return
 
-        playlist_name = self.playlist_name_entry.get()
-        song_ids = self.song_ids_entry.get().split(',')
-
-        if not playlist_name or not song_ids:
-            messagebox.showerror("Crear Playlist",
-                                 "Por favor, ingrese el nombre de la playlist y los IDs de las canciones")
-            return
-
-        if self.create_playlist(user_id, playlist_name, song_ids):
-            messagebox.showinfo("Crear Playlist", f"Playlist '{playlist_name}' creada y firmada")
+        private_key_pem = self.get_private_key(user_id)
+        if add_comment(user_id, song_id, comment, private_key_pem):
+            messagebox.showinfo("Agregar comentario", "Comentario agregado")
         else:
-            messagebox.showerror("Crear Playlist", "Error al crear la playlist")
+            messagebox.showerror("Agregar comentario", "Error al agregar comentario")
 
-    def verify_playlist_ui(self):
-        user_id = get_user_id(self.current_user)
-        if user_id is None:
-            messagebox.showerror("Verificar Playlist", "Id de usuario no encontrado")
-            return
-
-        playlist_id = simpledialog.askinteger("Verificar Playlist", "Ingrese el ID de la playlist")
-        if playlist_id is None:
-            return
-
-        is_valid = self.verify_playlist(user_id, playlist_id)
-        if is_valid:
-            messagebox.showinfo("Verificar Playlist", "Firma de la playlist verificada correctamente")
-        else:
-            messagebox.showerror("Verificar Playlist", "Firma de la playlist inválida")
-
-    def view_playlists(self):
-        user_id = get_user_id(self.current_user)
-        if user_id is None:
-            messagebox.showerror("Ver Playlists", "Id de usuario no encontrado")
-            return
-
+    def get_private_key(self, user_id):
         conn = create_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT id, name FROM playlists WHERE user_id = ?', (user_id,))
-        playlists = cursor.fetchall()
+        cursor.execute('SELECT private_key FROM users WHERE id = ?', (user_id,))
+        private_key_pem = cursor.fetchone()[0]
         conn.close()
+        return private_key_pem
 
-        if not playlists:
-            messagebox.showinfo("Ver Playlists", "No se encontraron playlists")
-            return
+    def verify_comments(self, song_id):
+        comments = get_comments(song_id)
+        for user_id, comment, signature in comments:
+            if verify_comment(user_id, comment, signature):
+                print(f"Comentario verificado: {comment}")
+            else:
+                print(f"Firma inválida para el comentario: {comment}")
 
-        playlist_info = "\n".join([f"ID: {playlist[0]}, Nombre: {playlist[1]}" for playlist in playlists])
-        messagebox.showinfo("Playlists", playlist_info)
+    def view_comments(self):
+        for item in self.comments_treeview.get_children():
+            self.comments_treeview.delete(item)  # Clear the treeview
+
+        comments = get_comments()  # Obtener todos los comentarios
+
+        for user_id, comment, signature in comments:
+            username = get_username_by_id(user_id)
+            is_verified = verify_comment(user_id, comment, signature)
+            verification_status = "Sí" if is_verified else "No"
+            self.comments_treeview.insert("", "end", values=(username, comment, verification_status))
+
+        self.show_frame(self.view_comments_frame)
+
 
 if __name__ == "__main__":
+    '''delete_all_tables()'''
     create_all_tables()
     root = tk.Tk()
-    root.geometry("400x400")
+    root.geometry("700x700")
     app = UserApp(root)
     root.mainloop()

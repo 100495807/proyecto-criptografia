@@ -1,10 +1,8 @@
 import sqlite3
-from security import create_connection, generate_rsa_key_pair
+from security import create_connection
 
 
-def register_user(username, email, hashed_password, salt, phone, gender, address):
-    private_key, public_key = generate_rsa_key_pair()
-
+def register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key):
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT username FROM users WHERE username = ? OR email = ? OR phone = ?',
@@ -89,3 +87,12 @@ def update_password(user_id, hashed_password, salt):
     conn.close()
     print(f"columnas afectadas: {cursor.rowcount}")
     return cursor.rowcount > 0
+
+# Definir la función para obtener el nombre de usuario por ID
+def get_username_by_id(user_id):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT username FROM users WHERE id = ?', (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None

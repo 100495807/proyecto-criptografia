@@ -13,8 +13,8 @@ def create_users_table():
         phone TEXT NOT NULL UNIQUE,
         gender TEXT NOT NULL,
         address TEXT NOT NULL,
-        private_key BLOB,
-        public_key BLOB
+        private_key BLOB NOT NULL,
+        public_key BLOB NOT NULL
     )''')
     conn.commit()
     conn.close()
@@ -35,17 +35,17 @@ def create_songs_table():
     conn.commit()
     conn.close()
 
-
-def create_playlists_table():
+def create_comments_table():
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS playlists (
+    cursor.execute('''CREATE TABLE IF NOT EXISTS comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        name TEXT NOT NULL,
-        song_ids TEXT NOT NULL,
-        signature TEXT NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id)
+        user_id INTEGER,
+        song_id INTEGER,
+        comment TEXT NOT NULL,
+        signature BLOB NOT NULL,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (song_id) REFERENCES songs(id)
     )''')
     conn.commit()
     conn.close()
@@ -54,8 +54,7 @@ def create_playlists_table():
 def create_all_tables():
     create_users_table()
     create_songs_table()
-    create_playlists_table()
-
+    create_comments_table()
 
 
 def delete_all_tables():
@@ -63,7 +62,7 @@ def delete_all_tables():
     cursor = conn.cursor()
     cursor.execute('DROP TABLE IF EXISTS users')
     cursor.execute('DROP TABLE IF EXISTS songs')
-    cursor.execute('DROP TABLE IF EXISTS playlists')
+    cursor.execute('DROP TABLE IF EXISTS comments')
     conn.commit()
     conn.close()
 
