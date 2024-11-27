@@ -378,23 +378,28 @@ class UserApp:
         self.comment_frame.grid_columnconfigure(0, weight=1)
         self.comment_frame.grid_columnconfigure(4, weight=1)
 
-        self.song_id_label = ttk.Label(self.comment_frame, text="ID de la canción")
-        self.song_id_label.grid(row=0, column=1, padx=5, pady=5)
-        self.song_id_entry = ttk.Entry(self.comment_frame)
-        self.song_id_entry.grid(row=0, column=2, padx=5, pady=5)
+        self.song_name_comment_label = ttk.Label(self.comment_frame, text="Nombre de la canción")
+        self.song_name_comment_label.grid(row=0, column=1, padx=5, pady=5)
+        self.song_name_comment_entry = ttk.Entry(self.comment_frame)
+        self.song_name_comment_entry.grid(row=0, column=2, padx=5, pady=5)
+
+        self.author_comment_label = ttk.Label(self.comment_frame, text="Nombre del artista")
+        self.author_comment_label.grid(row=1, column=1, padx=5, pady=5)
+        self.author_comment_entry = ttk.Entry(self.comment_frame)
+        self.author_comment_entry.grid(row=1, column=2, padx=5, pady=5)
 
         self.comment_label = ttk.Label(self.comment_frame, text="Comentario")
-        self.comment_label.grid(row=1, column=1, padx=5, pady=5)
+        self.comment_label.grid(row=2, column=1, padx=5, pady=5)
         self.comment_entry = ttk.Entry(self.comment_frame)
-        self.comment_entry.grid(row=1, column=2, padx=5, pady=5)
+        self.comment_entry.grid(row=2, column=2, padx=5, pady=5)
 
         self.add_comment_button = ttk.Button(self.comment_frame, text="Agregar comentario",
                                              command=self.add_comment)
-        self.add_comment_button.grid(row=2, column=1, columnspan=2, pady=10, sticky="ew")
+        self.add_comment_button.grid(row=3, column=1, columnspan=2, pady=10, sticky="ew")
 
         self.back_button = ttk.Button(self.comment_frame, text="Atrás",
                                       command=lambda: self.show_frame(self.post_login_frame))
-        self.back_button.grid(row=3, column=1, columnspan=2, pady=10, sticky="ew")
+        self.back_button.grid(row=4, column=1, columnspan=2, pady=10, sticky="ew")
 
     def create_view_comments_frame(self):
         self.view_comments_frame = ttk.Frame(self.root)
@@ -403,16 +408,23 @@ class UserApp:
         self.view_comments_frame.grid_columnconfigure(2, weight=1)
         self.view_comments_frame.grid_columnconfigure(3, weight=1)
         self.view_comments_frame.grid_columnconfigure(4, weight=1)
+        self.view_comments_frame.grid_columnconfigure(5, weight=1)
 
         self.comments_treeview = ttk.Treeview(self.view_comments_frame,
-                                              columns=("Usuario", "Comentario", "Firma Verificada"), show="headings")
+                                              columns=(
+                                              "Usuario", "Canción", "Artista", "Comentario", "Firma Verificada"),
+                                              show="headings")
         self.comments_treeview.heading("Usuario", text="Usuario")
+        self.comments_treeview.heading("Canción", text="Canción")
+        self.comments_treeview.heading("Artista", text="Artista")
         self.comments_treeview.heading("Comentario", text="Comentario")
         self.comments_treeview.heading("Firma Verificada", text="Firma Verificada")
         self.comments_treeview.column("Usuario", anchor="center")
+        self.comments_treeview.column("Canción", anchor="center")
+        self.comments_treeview.column("Artista", anchor="center")
         self.comments_treeview.column("Comentario", anchor="center")
         self.comments_treeview.column("Firma Verificada", anchor="center")
-        self.comments_treeview.grid(row=0, column=1, columnspan=3, padx=20, pady=20, sticky="ew")
+        self.comments_treeview.grid(row=0, column=1, columnspan=4, padx=20, pady=20, sticky="ew")
 
         self.back_button = ttk.Button(self.view_comments_frame, text="Atrás",
                                       command=lambda: self.show_frame(self.post_login_frame))
@@ -651,7 +663,8 @@ class UserApp:
         self.show_frame(self.view_songs_frame)
 
     def add_comment(self):
-        song_id = self.song_id_entry.get()
+        song_name = self.song_name_comment_entry.get()
+        author_name = self.author_comment_entry.get()
         comment = self.comment_entry.get()
         user_id = get_user_id(self.current_user)
         if user_id is None:
@@ -659,10 +672,11 @@ class UserApp:
             return
 
         private_key_pem = self.get_private_key(user_id)
-        if add_comment(user_id, song_id, comment, private_key_pem):
+        if add_comment(user_id, song_name, author_name, comment, private_key_pem, self.current_password,
+                       self.current_salt):
             messagebox.showinfo("Agregar comentario", "Comentario agregado")
         else:
-            messagebox.showerror("Agregar comentario", "Error al agregar comentario")
+            messagebox.showerror("Agregar comentario", "Error al agregar comentario o la canción no está registrada")
 
     def get_private_key(self, user_id):
         conn = create_connection()
@@ -675,8 +689,11 @@ class UserApp:
     def verify_comments(self, song_id):
         comments = get_comments(song_id)
         for user_id, comment, signature in comments:
-            if verify_comment(user_id, comment, signature):
+            looking_comment = verify_comment(user_id, comment, signature)
+            if looking_comment:
                 print(f"Comentario verificado: {comment}")
+            elif looking_comment is None:
+                print(f"Comentario no verificado: {comment}")
             else:
                 print(f"Firma inválida para el comentario: {comment}")
 
@@ -686,19 +703,19 @@ class UserApp:
 
         comments = get_comments()  # Obtener todos los comentarios
 
-        for user_id, comment, signature in comments:
+        for user_id, song_name, author_name, comment, signature in comments:
             username = get_username_by_id(user_id)
             is_verified = verify_comment(user_id, comment, signature)
             verification_status = "Sí" if is_verified else "No"
-            self.comments_treeview.insert("", "end", values=(username, comment, verification_status))
+            self.comments_treeview.insert("", "end",
+                                          values=(username, song_name, author_name, comment, verification_status))
 
         self.show_frame(self.view_comments_frame)
 
 
 if __name__ == "__main__":
-    '''delete_all_tables()'''
     create_all_tables()
     root = tk.Tk()
-    root.geometry("700x700")
+    root.geometry("600x500")
     app = UserApp(root)
     root.mainloop()

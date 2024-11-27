@@ -41,11 +41,11 @@ def create_comments_table():
     cursor.execute('''CREATE TABLE IF NOT EXISTS comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
-        song_id INTEGER,
+        song_name TEXT NOT NULL,
+        author_name TEXT NOT NULL,
         comment TEXT NOT NULL,
-        signature BLOB NOT NULL,
-        FOREIGN KEY (user_id) REFERENCES users(id),
-        FOREIGN KEY (song_id) REFERENCES songs(id)
+        signature BLOB,
+        FOREIGN KEY (user_id) REFERENCES users(id)
     )''')
     conn.commit()
     conn.close()
