@@ -108,6 +108,9 @@ def generate_rsa_key_pair():
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
 
+    print("Clave pública generada:", public_pem.decode())
+    print("Algoritmo: RSA, Longitud de clave: 2048 bits")
+
     return private_pem, public_pem
 
 
@@ -126,6 +129,9 @@ def sign_comment(private_key_pem, comment):
         ),
         hashes.SHA256()
     )
+
+    print("Comentario firmado:", base64.b64encode(signature).decode())
+    print("Algoritmo: RSA-PSS, Longitud de clave: 2048 bits")
 
     return signature
 
@@ -146,6 +152,9 @@ def verify_comment_signature(public_key_pem, comment, signature):
             ),
             hashes.SHA256()
         )
+        print("Firma verificada correctamente.")
+        print("Algoritmo: RSA-PSS, Longitud de clave: 2048 bits")
         return True
     except InvalidSignature:
+        print("Firma inválida.")
         return False

@@ -14,7 +14,7 @@ from security import hash_password, verify_password, generate_salt, \
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
 from validation import validate_username, validate_password, validate_phone, validate_email
-from query_comments import add_comment, get_comments, verify_comment
+from query_comments import add_comment, get_comments, verify_comment, get_private_key
 
 class UserApp:
     def __init__(self, root):
@@ -671,20 +671,13 @@ class UserApp:
             messagebox.showerror("Agregar comentario", "Id de usuario no encontrado")
             return
 
-        private_key_pem = self.get_private_key(user_id)
+        private_key_pem = get_private_key(user_id)
         if add_comment(user_id, song_name, author_name, comment, private_key_pem, self.current_password,
                        self.current_salt):
             messagebox.showinfo("Agregar comentario", "Comentario agregado")
         else:
             messagebox.showerror("Agregar comentario", "Error al agregar comentario o la canción no está registrada")
 
-    def get_private_key(self, user_id):
-        conn = create_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT private_key FROM users WHERE id = ?', (user_id,))
-        private_key_pem = cursor.fetchone()[0]
-        conn.close()
-        return private_key_pem
 
     def verify_comments(self, song_id):
         comments = get_comments(song_id)
