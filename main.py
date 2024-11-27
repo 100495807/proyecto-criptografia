@@ -225,17 +225,22 @@ class UserApp:
         self.address_entry = ttk.Entry(self.register_frame)
         self.address_entry.grid(row=6, column=2, padx=5, pady=5)
 
+        self.artist_listener_label = ttk.Label(self.register_frame, text="¿Eres artista u oyente?")
+        self.artist_listener_label.grid(row=7, column=1, padx=5, pady=5)
+        self.artist_listener_combobox = ttk.Combobox(self.register_frame,
+                                                     values=["Artista", "Oyente"], state="readonly")
+        self.artist_listener_combobox.grid(row=7, column=2, padx=5, pady=5)
+
         self.register_button = ttk.Button(self.register_frame, text="Registro",
                                           command=self.register)
-        self.register_button.grid(row=7, column=1, columnspan=3, pady=10, sticky="ew")
+        self.register_button.grid(row=8, column=1, columnspan=3, pady=10, sticky="ew")
 
         self.back_button = ttk.Button(self.register_frame, text="Atrás",
                                       command=lambda: self.show_frame(self.main_frame))
-        self.back_button.grid(row=8, column=1, columnspan=3, pady=10, sticky="ew")
+        self.back_button.grid(row=9, column=1, columnspan=3, pady=10, sticky="ew")
 
         self.register_frame.grid_columnconfigure(0, weight=1)
         self.register_frame.grid_columnconfigure(4, weight=1)
-
     def create_recover_frame(self):
         self.recover_frame = ttk.Frame(self.root)
         self.recover_frame.grid_columnconfigure(0, weight=1)
@@ -459,8 +464,9 @@ class UserApp:
         phone = self.phone_entry.get()
         gender = self.gender_combobox.get()
         address = self.address_entry.get()
+        user_type = self.artist_listener_combobox.get()
 
-        if not all([username, email, password, repeat_password, phone, gender, address]):
+        if not all([username, email, password, repeat_password, phone, gender, address, user_type]):
             messagebox.showerror("Registro", "Todos los campos son obligatorios")
             return
 
@@ -475,7 +481,7 @@ class UserApp:
         # Generar claves RSA
         private_key, public_key = generate_rsa_key_pair()
 
-        if register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key):
+        if register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key, user_type):
             messagebox.showinfo("Registro", "Usuario registrado")
             self.show_frame(self.login_username_frame)
         else:
