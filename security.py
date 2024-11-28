@@ -1,12 +1,15 @@
 import os
 import sqlite3
 import base64
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes, serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidKey, InvalidTag, InvalidSignature
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+import datetime
 
 
 def create_connection():
@@ -158,3 +161,129 @@ def verify_comment_signature(public_key_pem, comment, signature):
     except InvalidSignature:
         print("Firma inválida.")
         return False
+
+def create_root_ca(user_type):
+    # Generate private key for root CA
+    root_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    print(f"Root CA private key generated. Algorithm: RSA, Key length: 2048 bits")
+
+    # Create a self-signed certificate for root CA
+    subject = issuer = x509.Name([
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, user_type),
+        x509.NameAttribute(NameOID.COMMON_NAME, f"{user_type} Root CA"),
+    ])
+    root_cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        issuer
+    ).public_key(
+        root_key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.datetime.utcnow()
+    ).not_valid_after(
+        datetime.datetime.utcnow() + datetime.timedelta(days=3650)
+    ).add_extension(
+        x509.BasicConstraints(ca=True, path_length=None), critical=True,
+    ).sign(root_key, hashes.SHA256())
+    print(f"Root CA certificate created and self-signed.")
+
+    # Save the root key and certificate to files
+    with open(f"{user_type.lower()}_root_key.pem", "wb") as f:
+        f.write(root_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+    with open(f"{user_type.lower()}_root_cert.pem", "wb") as f:
+        f.write(root_cert.public_bytes(serialization.Encoding.PEM))
+
+    return root_key, root_cert
+
+def create_subordinate_ca(root_key, root_cert, user_type, common_name):
+    # Generate private key for subordinate CA
+    sub_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    print(f"{common_name} private key generated. Algorithm: RSA, Key length: 2048 bits")
+
+    # Create a certificate for subordinate CA signed by root CA
+    subject = x509.Name([
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, user_type),
+        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+    ])
+    sub_cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        root_cert.subject
+    ).public_key(
+        sub_key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.datetime.utcnow()
+    ).not_valid_after(
+        datetime.datetime.utcnow() + datetime.timedelta(days=1825)
+    ).add_extension(
+        x509.BasicConstraints(ca=True, path_length=0), critical=True,
+    ).sign(root_key, hashes.SHA256())
+    print(f"{common_name} certificate created and signed by Root CA.")
+
+    # Save the subordinate key and certificate to files
+    with open(f"{common_name.lower()}_key.pem", "wb") as f:
+        f.write(sub_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+    with open(f"{common_name.lower()}_cert.pem", "wb") as f:
+        f.write(sub_cert.public_bytes(serialization.Encoding.PEM))
+
+    return sub_key, sub_cert
+
+def issue_certificate(sub_key, sub_cert, user_name):
+    # Generate private key for user
+    user_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+    print(f"{user_name} private key generated. Algorithm: RSA, Key length: 2048 bits")
+
+    # Create a certificate for the user signed by the subordinate CA
+    subject = x509.Name([
+        x509.NameAttribute(NameOID.ORGANIZATION_NAME, "User"),
+        x509.NameAttribute(NameOID.COMMON_NAME, user_name),
+    ])
+    user_cert = x509.CertificateBuilder().subject_name(
+        subject
+    ).issuer_name(
+        sub_cert.subject
+    ).public_key(
+        user_key.public_key()
+    ).serial_number(
+        x509.random_serial_number()
+    ).not_valid_before(
+        datetime.datetime.utcnow()
+    ).not_valid_after(
+        datetime.datetime.utcnow() + datetime.timedelta(days=365)
+    ).add_extension(
+        x509.BasicConstraints(ca=False, path_length=None), critical=True,
+    ).sign(sub_key, hashes.SHA256())
+    print(f"{user_name} certificate created and signed by {sub_cert.subject.rfc4514_string()}.")
+
+    # Save the user key and certificate to files
+    with open(f"{user_name.lower()}_key.pem", "wb") as f:
+        f.write(user_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        ))
+    with open(f"{user_name.lower()}_cert.pem", "wb") as f:
+        f.write(user_cert.public_bytes(serialization.Encoding.PEM))
+
+    return user_key, user_cert

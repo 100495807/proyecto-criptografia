@@ -10,7 +10,7 @@ from query_users import register_user, authenticate_user, get_user_id, delete_so
     verify_email_recovery, get_user_by_email, update_password, get_username_by_id
 from query_songs import register_song, get_songs_by_user
 from security import hash_password, verify_password, generate_salt, \
-    decrypt_aes_gcm, derive_key, create_connection, generate_rsa_key_pair
+    decrypt_aes_gcm, derive_key, create_connection, generate_rsa_key_pair, create_root_ca, create_subordinate_ca, issue_certificate
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
 from validation import validate_username, validate_password, validate_phone, validate_email
@@ -481,6 +481,8 @@ class UserApp:
         # Generar claves RSA
         private_key, public_key = generate_rsa_key_pair()
 
+        user_key, user_cert = self.setup_pki(user_type, username)
+
         if register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key, user_type):
             messagebox.showinfo("Registro", "Usuario registrado")
             self.show_frame(self.login_username_frame)
@@ -711,6 +713,22 @@ class UserApp:
 
         self.show_frame(self.view_comments_frame)
 
+    def setup_pki(self, user_type, user_name):
+        from security import create_root_ca, create_subordinate_ca, issue_certificate
+
+        # Crear CA raíz para el tipo de usuario
+        root_key, root_cert = create_root_ca(user_type)
+        print("Root CA private key generated - Algorithm: RSA, Key length: 2048 bits")
+
+        # Crear CA subordinada para el tipo de usuario
+        sub_key, sub_cert = create_subordinate_ca(root_key, root_cert, user_type, f"{user_type} CA")
+        print(f"{user_type} CA private key generated - Algorithm: RSA, Key length: 2048 bits")
+
+        # Emitir certificado para el usuario
+        user_key, user_cert = issue_certificate(sub_key, sub_cert, user_name)
+        print(f"{user_name} private key generated - Algorithm: RSA, Key length: 2048 bits")
+
+        return user_key, user_cert
 
 if __name__ == "__main__":
     create_all_tables()
