@@ -1,3 +1,4 @@
+import os
 import smtplib
 import random
 import string
@@ -5,12 +6,17 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+
 from database import create_all_tables, delete_all_tables
 from query_users import register_user, authenticate_user, get_user_id, delete_songs_by_user_id, \
     verify_email_recovery, get_user_by_email, update_password, get_username_by_id
 from query_songs import register_song, get_songs_by_user
 from security import hash_password, verify_password, generate_salt, \
-    decrypt_aes_gcm, derive_key, create_connection, generate_rsa_key_pair, create_root_ca, create_subordinate_ca, issue_certificate
+    decrypt_aes_gcm, derive_key, create_connection, generate_rsa_key_pair, create_root_ca, \
+    create_subordinate_ca, issue_certificate, delete_pem_files
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
 from validation import validate_username, validate_password, validate_phone, validate_email
@@ -50,6 +56,7 @@ class UserApp:
         self.current_user = None
         self.current_password = None
         self.current_salt = None
+        self.user_type = None
 
         # Frames para las diferentes secciones
         self.login_username_frame = ttk.Frame(root, style="TFrame")
@@ -351,6 +358,11 @@ class UserApp:
         self.logout_button = ttk.Button(self.post_login_frame, text="Cerrar Sesión",
                                         command=lambda: self.show_frame(self.main_frame))
         self.logout_button.grid(row=5, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+        self.request_certificate_button = ttk.Button(self.post_login_frame,
+                                                     text="Solicitar certificado",
+                                                     command=self.issue_user_certificate)
+        self.request_certificate_button.grid(row=6, column=1, columnspan=2, padx=20, pady=20,
+                                             sticky="ew")
 
 
     def create_view_songs_frame(self):
@@ -464,8 +476,10 @@ class UserApp:
         phone = self.phone_entry.get()
         gender = self.gender_combobox.get()
         address = self.address_entry.get()
-        user_type = self.artist_listener_combobox.get()
+        self.user_type = self.artist_listener_combobox.get()
+        user_type = self.user_type
 
+        print(f"Tipo de usuario registrado: {self.user_type}")
         if not all([username, email, password, repeat_password, phone, gender, address, user_type]):
             messagebox.showerror("Registro", "Todos los campos son obligatorios")
             return
@@ -481,7 +495,6 @@ class UserApp:
         # Generar claves RSA
         private_key, public_key = generate_rsa_key_pair()
 
-        user_key, user_cert = self.setup_pki(user_type, username)
 
         if register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key, user_type):
             messagebox.showinfo("Registro", "Usuario registrado")
@@ -713,26 +726,116 @@ class UserApp:
 
         self.show_frame(self.view_comments_frame)
 
-    def setup_pki(self, user_type, user_name):
-        from security import create_root_ca, create_subordinate_ca, issue_certificate
+    import os
 
-        # Crear CA raíz para el tipo de usuario
-        root_key, root_cert = create_root_ca(user_type)
-        print("Root CA private key generated - Algorithm: RSA, Key length: 2048 bits")
+    def initialize_certificates(self):
+        # Verificar si el certificado raíz y su clave privada existen
+        root_cert_exists = os.path.exists('root_cert.pem')
+        root_key_exists = os.path.exists('root_key.pem')
 
-        # Crear CA subordinada para el tipo de usuario
-        sub_key, sub_cert = create_subordinate_ca(root_key, root_cert, user_type, f"{user_type} CA")
-        print(f"{user_type} CA private key generated - Algorithm: RSA, Key length: 2048 bits")
+        print(f"root_cert.pem exists: {root_cert_exists}")
+        print(f"root_root_key.pem exists: {root_key_exists}")
 
-        # Emitir certificado para el usuario
-        user_key, user_cert = issue_certificate(sub_key, sub_cert, user_name)
-        print(f"{user_name} private key generated - Algorithm: RSA, Key length: 2048 bits")
+        if not root_cert_exists or not root_key_exists:
+            print("Certificado raíz no encontrado. Creando certificado raíz...")
 
-        return user_key, user_cert
+            # Crear un único certificado raíz
+            root_key, root_cert = create_root_ca("Root")
+            print("Certificado raíz creado correctamente.")
+        else:
+            print("Certificado raíz ya existe. No se requiere crear un nuevo certificado raíz.")
+            # Leer el certificado raíz ya existente
+            with open('root_cert.pem', 'rb') as f:
+                root_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+            # Leer la clave raíz si es necesario
+            with open('root_key.pem', 'rb') as f:
+                root_key = serialization.load_pem_private_key(f.read(), password=None,
+                                                              backend=default_backend())
+
+        # Verificar si los certificados subordinados existen
+        oyente_sub_cert_exists = os.path.exists('oyente_sub_cert.pem')
+        artista_sub_cert_exists = os.path.exists('artista_sub_cert.pem')
+
+        print(f"oyente_sub_cert.pem exists: {oyente_sub_cert_exists}")
+        print(f"artista_sub_cert.pem exists: {artista_sub_cert_exists}")
+
+        if not oyente_sub_cert_exists or not artista_sub_cert_exists:
+            print("Creando certificados subordinados para Oyentes y Artistas...")
+
+            # Crear los subordinados para "Oyente" y "Artista" si no existen
+            if not oyente_sub_cert_exists:
+                oyente_sub_key, oyente_sub_cert = create_subordinate_ca(root_key, root_cert,
+                                                                        "Oyente")
+                print("Certificado subordinado de Oyente creado correctamente.")
+
+            if not artista_sub_cert_exists:
+                artista_sub_key, artista_sub_cert = create_subordinate_ca(root_key, root_cert,
+                                                                          "Artista")
+                print("Certificado subordinado de Artista creado correctamente.")
+        else:
+            print("Los certificados subordinados ya existen. No es necesario crear nuevos.")
+
+    import os
+
+    import os
+
+    def issue_user_certificate(self):
+        # Verificar el tipo de usuario y emitir el certificado correspondiente
+        if self.user_type == "Artista":
+            print("Solicitando certificado de Artista...")
+
+            # Generar el nombre del archivo
+            cert_filename = f"{self.username_entry_login.get().lower()}_cert.pem"
+            print(f"Nombre del archivo a verificar: {cert_filename}")  # Depuración
+
+            # Verificar si el certificado ya existe
+            if os.path.exists(cert_filename):
+                print(
+                    f"El certificado de Artista para {self.username_entry_login.get()} ya existe.")
+                return  # No emitir el certificado si ya existe
+
+            # Obtener la clave y el certificado subordinado de Artista
+            with open('artista_sub_key.pem', 'rb') as f:
+                artista_sub_key = serialization.load_pem_private_key(f.read(), password=None,
+                                                                     backend=default_backend())
+            with open('artista_sub_cert.pem', 'rb') as f:
+                artista_sub_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+
+            # Emitir el certificado para el Artista
+            user_key, user_cert = issue_certificate(artista_sub_key, artista_sub_cert,
+                                                    self.username_entry_login.get())
+            print(
+                f"Certificado de Artista para {self.username_entry_login.get()} emitido correctamente.")
+
+        elif self.user_type == "Oyente":
+            print("Solicitando certificado de Oyente...")
+
+            # Generar el nombre del archivo
+            cert_filename = f"{self.username_entry_login.get().lower()}_cert.pem"
+            print(f"Nombre del archivo a verificar: {cert_filename}")  # Depuración
+
+            # Verificar si el certificado ya existe
+            if os.path.exists(cert_filename):
+                print(f"El certificado de Oyente para {self.username_entry_login.get()} ya existe.")
+                return  # No emitir el certificado si ya existe
+
+            # Obtener la clave y el certificado subordinado de Oyente
+            with open('oyente_sub_key.pem', 'rb') as f:
+                oyente_sub_key = serialization.load_pem_private_key(f.read(), password=None,
+                                                                    backend=default_backend())
+            with open('oyente_sub_cert.pem', 'rb') as f:
+                oyente_sub_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
+
+            # Emitir el certificado para el Oyente
+            user_key, user_cert = issue_certificate(oyente_sub_key, oyente_sub_cert, self.user_name)
+            print(
+                f"Certificado de Oyente para {self.username_entry_login.get()} emitido correctamente.")
+
 
 if __name__ == "__main__":
-    create_all_tables()
     root = tk.Tk()
-    root.geometry("600x500")
     app = UserApp(root)
+    app.initialize_certificates()
+    create_all_tables()
+    root.geometry("600x500")
     root.mainloop()

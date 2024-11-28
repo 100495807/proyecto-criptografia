@@ -163,14 +163,14 @@ def verify_comment_signature(public_key_pem, comment, signature):
         return False
 
 def create_root_ca(user_type):
-    # Generate private key for root CA
+    # Generar la clave privada para el certificado raíz
     root_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
     )
     print(f"Root CA private key generated. Algorithm: RSA, Key length: 2048 bits")
 
-    # Create a self-signed certificate for root CA
+    # Crear el certificado raíz auto-firmado
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, user_type),
         x509.NameAttribute(NameOID.COMMON_NAME, f"{user_type} Root CA"),
@@ -192,30 +192,30 @@ def create_root_ca(user_type):
     ).sign(root_key, hashes.SHA256())
     print(f"Root CA certificate created and self-signed.")
 
-    # Save the root key and certificate to files
-    with open(f"{user_type.lower()}_root_key.pem", "wb") as f:
+    # Guardar la clave y el certificado raíz en los archivos correctos
+    with open('root_cert.pem', 'wb') as f:  # Cambié el nombre a root_cert.pem
+        f.write(root_cert.public_bytes(serialization.Encoding.PEM))
+    with open('root_key.pem', 'wb') as f:  # Cambié el nombre a root_key.pem
         f.write(root_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         ))
-    with open(f"{user_type.lower()}_root_cert.pem", "wb") as f:
-        f.write(root_cert.public_bytes(serialization.Encoding.PEM))
 
     return root_key, root_cert
 
-def create_subordinate_ca(root_key, root_cert, user_type, common_name):
+def create_subordinate_ca(root_key, root_cert, user_type):
     # Generate private key for subordinate CA
     sub_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
     )
-    print(f"{common_name} private key generated. Algorithm: RSA, Key length: 2048 bits")
+    print(f"{user_type} private key generated. Algorithm: RSA, Key length: 2048 bits")
 
     # Create a certificate for subordinate CA signed by root CA
     subject = x509.Name([
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, user_type),
-        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+        x509.NameAttribute(NameOID.COMMON_NAME, f"{user_type} Subordinate CA"),
     ])
     sub_cert = x509.CertificateBuilder().subject_name(
         subject
@@ -232,16 +232,16 @@ def create_subordinate_ca(root_key, root_cert, user_type, common_name):
     ).add_extension(
         x509.BasicConstraints(ca=True, path_length=0), critical=True,
     ).sign(root_key, hashes.SHA256())
-    print(f"{common_name} certificate created and signed by Root CA.")
+    print(f"{user_type} certificate created and signed by Root CA.")
 
     # Save the subordinate key and certificate to files
-    with open(f"{common_name.lower()}_key.pem", "wb") as f:
+    with open(f"{user_type.lower()}_sub_key.pem", "wb") as f:
         f.write(sub_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         ))
-    with open(f"{common_name.lower()}_cert.pem", "wb") as f:
+    with open(f"{user_type.lower()}_sub_cert.pem", "wb") as f:
         f.write(sub_cert.public_bytes(serialization.Encoding.PEM))
 
     return sub_key, sub_cert
@@ -287,3 +287,21 @@ def issue_certificate(sub_key, sub_cert, user_name):
         f.write(user_cert.public_bytes(serialization.Encoding.PEM))
 
     return user_key, user_cert
+
+
+def delete_pem_files(directory=None):
+    # Usar el directorio actual si no se proporciona ninguno
+    if directory is None:
+        directory = os.getcwd()
+
+    # Iterar a través de los archivos en el directorio
+    for filename in os.listdir(directory):
+        # Comprobar si el archivo tiene extensión .pem
+        if filename.endswith(".pem"):
+            file_path = os.path.join(directory, filename)
+            try:
+                # Eliminar el archivo .pem
+                os.remove(file_path)
+                print(f"Archivo eliminado: {file_path}")
+            except Exception as e:
+                print(f"No se pudo eliminar el archivo {file_path}. Error: {e}")
