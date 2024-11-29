@@ -1,4 +1,8 @@
+import os
 import sqlite3
+
+from cryptography import x509
+
 from security import create_connection
 
 
@@ -52,6 +56,14 @@ def get_user_id(username):
     conn.close()
     return result[0] if result else None
 
+def get_user_type(username):
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT user_type FROM users WHERE username = ?', (username,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
 def delete_songs_by_user_id(user_id):
     conn = create_connection()
     cursor = conn.cursor()
@@ -96,3 +108,27 @@ def get_username_by_id(user_id):
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
+
+CERTIFICATES_FOLDER = "certificados"  # Ruta a la carpeta donde se almacenan los certificados
+def get_user_certificate(user_id):
+    """
+    Obtiene el certificado de un usuario basado en su ID.
+    """
+    username = get_username_by_id(user_id)
+
+    if not username:
+        raise ValueError(f"No se encontró un nombre de usuario para el ID {user_id}.")
+
+    cert_path = os.path.join(CERTIFICATES_FOLDER, f"{username}_cert.pem")
+
+    if not os.path.exists(cert_path):
+        raise FileNotFoundError(f"No se encontró el certificado para el usuario con ID {user_id} y nombre {username}.")
+
+    with open(cert_path, "rb") as cert_file:
+        cert_data = cert_file.read()
+        try:
+            user_cert = x509.load_pem_x509_certificate(cert_data)
+            print(f"Certificado cargado para el usuario {username} (ID: {user_id}).")
+            return user_cert
+        except ValueError:
+            raise ValueError(f"El archivo del certificado para el usuario {username} no es válido.")

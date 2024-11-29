@@ -140,12 +140,14 @@ def sign_comment(private_key_pem, comment):
 
 
 def verify_comment_signature(public_key_pem, comment, signature):
+    # Cargar la clave pública desde el PEM
     public_key = serialization.load_pem_public_key(
         public_key_pem,
         backend=default_backend()
     )
 
     try:
+        # Verificar la firma con la clave pública
         public_key.verify(
             signature,
             comment.encode(),
@@ -155,20 +157,21 @@ def verify_comment_signature(public_key_pem, comment, signature):
             ),
             hashes.SHA256()
         )
-        print("Firma verificada correctamente.")
-        print("Algoritmo: RSA-PSS, Longitud de clave: 2048 bits")
         return True
     except InvalidSignature:
-        print("Firma inválida.")
         return False
 
 def create_root_ca(user_type):
+    CERT_FOLDER = "certificados"
+
+    # Crear la carpeta de certificados si no existe
+    os.makedirs(CERT_FOLDER, exist_ok=True)
+    CERT_FOLDER = os.path.abspath(CERT_FOLDER)
     # Generar la clave privada para el certificado raíz
     root_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
     )
-    print(f"Root CA private key generated. Algorithm: RSA, Key length: 2048 bits")
 
     # Crear el certificado raíz auto-firmado
     subject = issuer = x509.Name([
@@ -190,12 +193,11 @@ def create_root_ca(user_type):
     ).add_extension(
         x509.BasicConstraints(ca=True, path_length=None), critical=True,
     ).sign(root_key, hashes.SHA256())
-    print(f"Root CA certificate created and self-signed.")
 
-    # Guardar la clave y el certificado raíz en los archivos correctos
-    with open('root_cert.pem', 'wb') as f:  # Cambié el nombre a root_cert.pem
+    # Guardar la clave y el certificado raíz en los archivos correctos dentro de CERT_FOLDER
+    with open(os.path.join(CERT_FOLDER, 'root_cert.pem'), 'wb') as f:
         f.write(root_cert.public_bytes(serialization.Encoding.PEM))
-    with open('root_key.pem', 'wb') as f:  # Cambié el nombre a root_key.pem
+    with open(os.path.join(CERT_FOLDER, 'root_key.pem'), 'wb') as f:
         f.write(root_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
@@ -204,15 +206,15 @@ def create_root_ca(user_type):
 
     return root_key, root_cert
 
-def create_subordinate_ca(root_key, root_cert, user_type):
-    # Generate private key for subordinate CA
+
+def create_subordinate_ca(root_key, root_cert, user_type, CERT_FOLDER):
+    # Generar clave privada para la CA subordinada
     sub_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
     )
-    print(f"{user_type} private key generated. Algorithm: RSA, Key length: 2048 bits")
 
-    # Create a certificate for subordinate CA signed by root CA
+    # Crear el certificado para la CA subordinada firmado por la raíz
     subject = x509.Name([
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, user_type),
         x509.NameAttribute(NameOID.COMMON_NAME, f"{user_type} Subordinate CA"),
@@ -232,19 +234,19 @@ def create_subordinate_ca(root_key, root_cert, user_type):
     ).add_extension(
         x509.BasicConstraints(ca=True, path_length=0), critical=True,
     ).sign(root_key, hashes.SHA256())
-    print(f"{user_type} certificate created and signed by Root CA.")
 
-    # Save the subordinate key and certificate to files
-    with open(f"{user_type.lower()}_sub_key.pem", "wb") as f:
+    # Guardar la clave y el certificado subordinado dentro de CERT_FOLDER
+    with open(os.path.join(CERT_FOLDER, f"{user_type.lower()}_sub_key.pem"), "wb") as f:
         f.write(sub_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         ))
-    with open(f"{user_type.lower()}_sub_cert.pem", "wb") as f:
+    with open(os.path.join(CERT_FOLDER, f"{user_type.lower()}_sub_cert.pem"), "wb") as f:
         f.write(sub_cert.public_bytes(serialization.Encoding.PEM))
 
     return sub_key, sub_cert
+
 
 def issue_certificate(sub_key, sub_cert, user_name):
     # Generate private key for user
@@ -276,17 +278,47 @@ def issue_certificate(sub_key, sub_cert, user_name):
     ).sign(sub_key, hashes.SHA256())
     print(f"{user_name} certificate created and signed by {sub_cert.subject.rfc4514_string()}.")
 
-    # Save the user key and certificate to files
-    with open(f"{user_name.lower()}_key.pem", "wb") as f:
+    # Guardar el certificado y la clave en la carpeta 'certificados'
+    cert_folder = "certificados"
+    os.makedirs(cert_folder, exist_ok=True)
+
+    # Ruta de los archivos dentro de la carpeta 'certificados'
+    user_key_path = os.path.join(cert_folder, f"{user_name.lower()}_key.pem")
+    user_cert_path = os.path.join(cert_folder, f"{user_name.lower()}_cert.pem")
+
+    # Guardar la clave privada del usuario
+    with open(user_key_path, "wb") as f:
         f.write(user_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         ))
-    with open(f"{user_name.lower()}_cert.pem", "wb") as f:
+
+    # Guardar el certificado del usuario
+    with open(user_cert_path, "wb") as f:
         f.write(user_cert.public_bytes(serialization.Encoding.PEM))
 
+    print(f"User key and certificate saved in {cert_folder}.")
+
     return user_key, user_cert
+
+import datetime
+
+def verify_certificate(cert):
+    try:
+        # Comprobar que el certificado no haya expirado usando timezone-aware datetime
+        current_time = datetime.datetime.now(datetime.timezone.utc)  # Usando UTC con timezone-aware datetime
+        if cert.not_valid_before_utc > current_time or cert.not_valid_after_utc < current_time:
+            print(f"El certificado ha expirado o no es válido aún.")
+            return False
+
+        # Aquí podrías agregar otras verificaciones, como comprobar la firma
+        # del certificado usando la clave pública de la CA o cualquier otra cosa.
+        print("Certificado válido.")
+        return True
+    except Exception as e:
+        print(f"Error al verificar el certificado: {e}")
+        return False
 
 
 def delete_pem_files(directory=None):
@@ -305,3 +337,5 @@ def delete_pem_files(directory=None):
                 print(f"Archivo eliminado: {file_path}")
             except Exception as e:
                 print(f"No se pudo eliminar el archivo {file_path}. Error: {e}")
+
+
