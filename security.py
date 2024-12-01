@@ -339,3 +339,41 @@ def delete_pem_files(directory=None):
                 print(f"No se pudo eliminar el archivo {file_path}. Error: {e}")
 
 
+def encrypt_private_key(private_key, key, nonce):
+    cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
+    encryptor = cipher.encryptor()
+    cipher_text = encryptor.update(private_key) + encryptor.finalize()
+    tag = encryptor.tag
+
+    print(f"Cifrado AES-GCM: Clave privada cifrada | Clave: {len(key) * 8} bits | "
+          f"Etiqueta: {base64.b64encode(tag).decode()} | "
+          f"Texto cifrado: {base64.b64encode(cipher_text).decode()} | "
+          f"Nonce: {base64.b64encode(nonce).decode()}")
+    return base64.b64encode(nonce + tag + cipher_text).decode('utf-8')
+
+
+def decrypt_private_key(encrypted_private_key_b64, key, nonce):
+    try:
+        encrypted_private_key = base64.b64decode(encrypted_private_key_b64)
+        tag = encrypted_private_key[12:28]
+        cipher_text = encrypted_private_key[28:]
+
+        if isinstance(nonce, str):
+            nonce = base64.b64decode(nonce)
+
+        # Verificar la longitud del nonce
+        if not (8 <= len(nonce) <= 128):
+            raise ValueError("El nonce debe tener entre 8 y 128 bytes (64 y 1024 bits).")
+
+        cipher = Cipher(algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend())
+        decryptor = cipher.decryptor()
+        private_key = decryptor.update(cipher_text) + decryptor.finalize()
+
+        print(f"Descifrado AES-GCM: Clave privada descifrada | Clave: {len(key) * 8} bits | "
+              f"Etiqueta: {base64.b64encode(tag).decode()} | "
+              f"Texto descifrado: {base64.b64encode(private_key).decode()} | "
+              f"Nonce: {base64.b64encode(nonce).decode()}")
+        return private_key
+    except InvalidTag:
+        print("Error: Etiqueta inválida.")
+        return None

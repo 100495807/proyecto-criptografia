@@ -14,6 +14,7 @@ def create_users_table():
         gender TEXT NOT NULL,
         address TEXT NOT NULL,
         private_key BLOB NOT NULL,
+        nonce BLOB NOT NULL,
         public_key BLOB NOT NULL,
         user_type TEXT NOT NULL
     )''')

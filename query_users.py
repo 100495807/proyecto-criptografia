@@ -3,23 +3,24 @@ import sqlite3
 
 from cryptography import x509
 
-from security import create_connection
+from security import create_connection, encrypt_private_key
 
 
 def register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key, user_type):
+    nonce = os.urandom(12)  # Generar un nonce de 12 bytes
+    encrypted_private_key = encrypt_private_key(private_key, hashed_password, nonce)
+
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT username FROM users WHERE username = ? OR email = ? OR phone = ?',
-                   (username, email, phone))
+    cursor.execute('SELECT username FROM users WHERE username = ? OR email = ? OR phone = ?', (username, email, phone))
     if cursor.fetchone():
         conn.close()
         return False
 
     cursor.execute(
-        'INSERT INTO users (username, email, hashed_password, salt, phone, gender, address, private_key, public_key, user_type) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        (username, email, sqlite3.Binary(hashed_password), sqlite3.Binary(salt), phone, gender,
-         address, private_key, public_key, user_type))
+        'INSERT INTO users (username, email, hashed_password, salt, phone, gender, address, private_key, nonce, public_key, user_type) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (username, email, sqlite3.Binary(hashed_password), sqlite3.Binary(salt), phone, gender, address, encrypted_private_key, nonce, public_key, user_type))
     conn.commit()
     conn.close()
     print(f"Usuario registrado: {username}, Contraseña Hasheada: {hashed_password}, Salt: {salt}")

@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from query_users import get_user_certificate, get_username_by_id
 from security import create_connection, sign_comment, verify_comment_signature, decrypt_aes_gcm, \
-    derive_key, verify_certificate
+    derive_key, verify_certificate, decrypt_private_key
 from query_songs import get_songs_by_user
 
 
@@ -93,10 +93,19 @@ def verify_comment(user_id, comment, signature):
         else:
             print("La firma no es válida.")
         return is_verified
-def get_private_key(user_id):
+
+
+def get_private_key(user_id, password, salt):
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT private_key FROM users WHERE id = ?', (user_id,))
-    private_key_pem = cursor.fetchone()[0]
+    cursor.execute('SELECT private_key, nonce FROM users WHERE id = ?', (user_id,))
+    result = cursor.fetchone()
     conn.close()
-    return private_key_pem
+
+    if result:
+        encrypted_private_key, nonce = result
+        key = derive_key(password, salt)
+        private_key_pem = decrypt_private_key(encrypted_private_key, key, nonce)
+        return private_key_pem
+    else:
+        return None

@@ -249,6 +249,7 @@ class UserApp:
 
         self.register_frame.grid_columnconfigure(0, weight=1)
         self.register_frame.grid_columnconfigure(4, weight=1)
+
     def create_recover_frame(self):
         self.recover_frame = ttk.Frame(self.root)
         self.recover_frame.grid_columnconfigure(0, weight=1)
@@ -356,14 +357,16 @@ class UserApp:
                                                command=self.view_comments)
         self.view_comments_button.grid(row=3, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
 
-        self.logout_button = ttk.Button(self.post_login_frame, text="Cerrar Sesión",
-                                        command=lambda: self.show_frame(self.main_frame))
-        self.logout_button.grid(row=5, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
         self.request_certificate_button = ttk.Button(self.post_login_frame,
                                                      text="Solicitar certificado",
                                                      command=self.issue_user_certificate)
-        self.request_certificate_button.grid(row=6, column=1, columnspan=2, padx=20, pady=20,
+        self.request_certificate_button.grid(row=5, column=1, columnspan=2, padx=20, pady=20,
                                              sticky="ew")
+
+        self.logout_button = ttk.Button(self.post_login_frame, text="Cerrar Sesión",
+                                        command=lambda: self.show_frame(self.main_frame))
+        self.logout_button.grid(row=6, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+
 
 
     def create_view_songs_frame(self):
@@ -695,10 +698,17 @@ class UserApp:
             messagebox.showerror("Agregar comentario", "Id de usuario no encontrado")
             return
 
-        private_key_pem = get_private_key(user_id)
+        private_key_pem = get_private_key(user_id, self.current_password, self.current_salt)
+        if private_key_pem is None:
+            messagebox.showerror("Agregar comentario", "Clave privada no encontrada")
+            return
+
         if add_comment(user_id, song_name, author_name, comment, private_key_pem, self.current_password,
                        self.current_salt):
             messagebox.showinfo("Agregar comentario", "Comentario agregado")
+            self.song_name_comment_entry.delete(0, tk.END)
+            self.author_comment_entry.delete(0, tk.END)
+            self.comment_entry.delete(0, tk.END)
         else:
             messagebox.showerror("Agregar comentario", "Error al agregar comentario o la canción no está registrada")
 
@@ -709,8 +719,6 @@ class UserApp:
             user_cert = get_user_certificate(user_id)  # Obtener el certificado del usuario
             print(f"Certificado del usuario {user_id} cargado.")
 
-            # Obtener la clave pública del usuario desde el certificado
-            public_key = user_cert.public_key()  # Asumimos que el certificado tiene este método
 
             # Verificar la firma del comentario con la clave pública
             is_verified = verify_comment(user_id, comment, signature)
@@ -730,7 +738,7 @@ class UserApp:
 
         for user_id, song_name, author_name, comment, signature in comments:
             username = get_username_by_id(user_id)  # Obtener el nombre del usuario
-            user_cert = get_user_certificate(user_id)  # Obtener el certificado del usuario
+
 
             # Verificar si el comentario está firmado correctamente
             is_verified = verify_comment(user_id, comment, signature)
@@ -839,9 +847,6 @@ class UserApp:
                 print(
                     f"El certificado existente no corresponde a {username}. Se generará uno nuevo.")
 
-        # Inicializar las variables
-        user_key = None
-        user_cert = None
 
         # Determinar el tipo de usuario y generar el certificado
         user_type = get_user_type(username)
