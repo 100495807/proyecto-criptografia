@@ -5,23 +5,21 @@ import string
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
-
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-
 from database import create_all_tables, delete_all_tables
 from query_users import register_user, authenticate_user, get_user_id, delete_songs_by_user_id, \
     verify_email_recovery, get_user_by_email, update_password, get_username_by_id, get_user_type, get_user_certificate
 from query_songs import register_song, get_songs_by_user
 from security import hash_password, verify_password, generate_salt, \
-    decrypt_aes_gcm, derive_key, create_connection, generate_rsa_key_pair, create_root_ca, \
-    create_subordinate_ca, issue_certificate, delete_pem_files, verify_comment_signature, \
-    get_private_key_from_db, save_private_key
+    decrypt_aes_gcm, derive_key, generate_rsa_key_pair, create_root_ca, \
+    create_subordinate_ca, issue_certificate, get_private_key_from_db, save_private_key
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
 from validation import validate_username, validate_password, validate_phone, validate_email
 from query_comments import add_comment, get_comments, verify_comment, get_private_key
+from insert_song import insert_artist_song, get_artist_songs
 
 class UserApp:
     def __init__(self, root):
@@ -70,6 +68,8 @@ class UserApp:
         self.view_songs_frame = ttk.Frame(root, style="TFrame")
         self.comment_frame = ttk.Frame(root, style="TFrame")
         self.view_comments_frame = ttk.Frame(root, style="TFrame")
+        self.artist_song_frame = ttk.Frame(root, style="TFrame")
+
 
         self.create_main_frame()
         self.create_login_username_frame()
@@ -80,6 +80,9 @@ class UserApp:
         self.create_view_songs_frame()
         self.create_comment_frame()
         self.create_view_comments_frame()
+        self.create_artist_song_frame()
+        self.create_view_artist_songs_frame()
+
 
         self.main_frame.pack(fill="both", expand=True)
         self.login_username_frame.pack(fill="both", expand=True)
@@ -88,6 +91,7 @@ class UserApp:
         self.song_frame.pack(fill="both", expand=True)
         self.recover_frame.pack(fill="both", expand=True)
         self.post_login_frame.pack(fill="both", expand=True)
+        self.view_artist_songs_frame.pack(fill="both", expand=True)
         self.show_frame(self.main_frame)
         self.password_visible = False
 
@@ -101,6 +105,8 @@ class UserApp:
         self.view_songs_frame.pack_forget()
         self.comment_frame.pack_forget()
         self.view_comments_frame.pack_forget()
+        self.artist_song_frame.pack_forget()
+        self.view_artist_songs_frame.pack_forget()
 
         if frame == self.recover_frame:
             self.show_email_widgets()
@@ -341,32 +347,37 @@ class UserApp:
     def create_post_login_frame(self):
         self.post_login_frame = ttk.Frame(self.root)
         self.post_login_frame.grid_columnconfigure(0, weight=1)
-        self.post_login_frame.grid_columnconfigure(4, weight=1)
+        self.post_login_frame.grid_columnconfigure(1, weight=1)
 
         self.insert_song_button = ttk.Button(self.post_login_frame, text="Insertar Canción",
                                              command=lambda: self.show_frame(self.song_frame))
-        self.insert_song_button.grid(row=0, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+        self.insert_song_button.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
 
         self.view_songs_button = ttk.Button(self.post_login_frame, text="Ver Canciones", command=self.view_songs)
-        self.view_songs_button.grid(row=1, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+        self.view_songs_button.grid(row=0, column=1, padx=20, pady=20, sticky="ew")
 
         self.comment_button = ttk.Button(self.post_login_frame, text="Agregar Comentario",
-                                            command=lambda: self.show_frame(self.comment_frame))
-        self.comment_button.grid(row=2, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+                                         command=lambda: self.show_frame(self.comment_frame))
+        self.comment_button.grid(row=1, column=0, padx=20, pady=20, sticky="ew")
 
         self.view_comments_button = ttk.Button(self.post_login_frame, text="Ver Comentarios",
                                                command=self.view_comments)
-        self.view_comments_button.grid(row=3, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+        self.view_comments_button.grid(row=1, column=1, padx=20, pady=20, sticky="ew")
 
         self.request_certificate_button = ttk.Button(self.post_login_frame,
                                                      text="Solicitar certificado",
                                                      command=self.issue_user_certificate)
-        self.request_certificate_button.grid(row=5, column=1, columnspan=2, padx=20, pady=20,
-                                             sticky="ew")
+        self.request_certificate_button.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
+
+        self.create_song_button = ttk.Button(self.post_login_frame, text="Crear Canción (artistas)",
+                                             command=self.show_artist_song_frame)
+        self.create_song_button.grid(row=2, column=1, padx=20, pady=20, sticky="ew")
 
         self.logout_button = ttk.Button(self.post_login_frame, text="Cerrar Sesión",
                                         command=lambda: self.show_frame(self.main_frame))
-        self.logout_button.grid(row=6, column=1, columnspan=2, padx=20, pady=20, sticky="ew")
+        self.logout_button.grid(row=3, column=0, columnspan=2, padx=20, pady=20, sticky="ew")
+
+
 
 
 
@@ -451,6 +462,77 @@ class UserApp:
         self.back_button = ttk.Button(self.view_comments_frame, text="Atrás",
                                       command=lambda: self.show_frame(self.post_login_frame))
         self.back_button.grid(row=1, column=2, padx=20, pady=20, sticky="ew")
+
+    def create_artist_song_frame(self):
+        self.artist_song_frame = ttk.Frame(self.root)
+        self.artist_song_frame.grid_columnconfigure(0, weight=1)
+        self.artist_song_frame.grid_columnconfigure(4, weight=1)
+
+        self.song_name_label = ttk.Label(self.artist_song_frame, text="Nombre de la canción")
+        self.song_name_label.grid(row=0, column=1, padx=5, pady=5)
+        self.song_name_entry = ttk.Entry(self.artist_song_frame)
+        self.song_name_entry.grid(row=0, column=2, padx=5, pady=5)
+
+        self.lyrics_label = ttk.Label(self.artist_song_frame, text="Letra")
+        self.lyrics_label.grid(row=1, column=1, padx=5, pady=5)
+        self.lyrics_entry = tk.Text(self.artist_song_frame, height=10, width=40)
+        self.lyrics_entry.grid(row=1, column=2, padx=5, pady=5)
+
+        self.description_label = ttk.Label(self.artist_song_frame, text="Descripción")
+        self.description_label.grid(row=2, column=1, padx=5, pady=5)
+        self.description_entry = tk.Text(self.artist_song_frame, height=5, width=40)
+        self.description_entry.grid(row=2, column=2, padx=5, pady=5)
+
+        self.credits_label = ttk.Label(self.artist_song_frame, text="Créditos")
+        self.credits_label.grid(row=3, column=1, padx=5, pady=5)
+        self.credits_entry = tk.Text(self.artist_song_frame, height=5, width=40)
+        self.credits_entry.grid(row=3, column=2, padx=5, pady=5)
+
+        self.insert_song_button = ttk.Button(self.artist_song_frame, text="Insertar Canción",
+                                             command=self.insert_artist_song)
+        self.insert_song_button.grid(row=4, column=1, columnspan=2, pady=10, sticky="ew")
+
+        self.view_my_songs_button = ttk.Button(self.artist_song_frame, text="Ver mis canciones",
+                                                  command=self.view_artists_songs)
+        self.view_my_songs_button.grid(row=5, column=1, columnspan=2, pady=10, sticky="ew")
+
+        self.back_button = ttk.Button(self.artist_song_frame, text="Atrás",
+                                      command=lambda: self.show_frame(self.post_login_frame))
+        self.back_button.grid(row=6, column=1, columnspan=2, pady=10, sticky="ew")
+
+    def create_view_artist_songs_frame(self):
+        self.view_artist_songs_frame = ttk.Frame(self.root)
+        self.view_artist_songs_frame.grid_columnconfigure(0, weight=1)
+        self.view_artist_songs_frame.grid_columnconfigure(1, weight=1)
+        self.view_artist_songs_frame.grid_columnconfigure(2, weight=1)
+        self.view_artist_songs_frame.grid_columnconfigure(3, weight=1)
+        self.view_artist_songs_frame.grid_columnconfigure(4, weight=1)
+        self.view_artist_songs_frame.grid_columnconfigure(5, weight=1)
+        self.view_artist_songs_frame.grid_columnconfigure(6, weight=1)
+
+        self.songs_treeview = ttk.Treeview(self.view_artist_songs_frame,
+                                           columns=("Canción", "Letra", "Descripción", "Créditos"), show="headings")
+        self.songs_treeview.heading("Canción", text="Canción")
+        self.songs_treeview.heading("Letra", text="Letra")
+        self.songs_treeview.heading("Descripción", text="Descripción")
+        self.songs_treeview.heading("Créditos", text="Créditos")
+        self.songs_treeview.column("Canción", anchor="center")
+        self.songs_treeview.column("Letra", anchor="center")
+        self.songs_treeview.column("Descripción", anchor="center")
+        self.songs_treeview.column("Créditos", anchor="center")
+        self.songs_treeview.grid(row=0, column=1, columnspan=5, padx=20, pady=20, sticky="ew")
+
+        self.back_button = ttk.Button(self.view_artist_songs_frame, text="Atrás",
+                                      command=lambda: self.show_frame(self.artist_song_frame))
+        self.back_button.grid(row=1, column=3, padx=20, pady=20, sticky="ew")
+
+    def show_artist_song_frame(self):
+        user_type = get_user_type(self.current_user)
+        if user_type != "Artista":
+            messagebox.showerror("Error", "Solo los artistas pueden acceder a esta sección")
+            return
+        self.show_frame(self.artist_song_frame)
+
 
     def login(self):
         username = self.username_entry_login.get()
@@ -859,10 +941,66 @@ class UserApp:
         with open(cert_filename, 'wb') as f:
             f.write(user_cert.public_bytes(encoding=serialization.Encoding.PEM))
         print(f"Certificado para {username} guardado correctamente.")
+
+
+    def insert_artist_song(self):
+        song_name = self.song_name_entry.get()
+        lyrics = self.lyrics_entry.get("1.0", tk.END).strip()
+        description = self.description_entry.get("1.0", tk.END).strip()
+        credits = self.credits_entry.get("1.0", tk.END).strip()
+
+        if not song_name or not lyrics or not description or not credits:
+            messagebox.showerror("Error", "Todos los campos son obligatorios")
+            return
+
+        user_id = get_user_id(self.current_user)
+        if user_id is None:
+            messagebox.showerror("Error", "Usuario no encontrado")
+            return
+
+        # Obtener la contraseña y el salt del usuario actual
+        password = self.current_password
+        salt = self.current_salt
+
+        # Insertar la canción en la base de datos
+        if insert_artist_song(user_id, song_name, lyrics, description, credits, password, salt):
+            messagebox.showinfo("Éxito", "Canción insertada correctamente")
+            self.song_name_entry.delete(0, tk.END)
+            self.lyrics_entry.delete("1.0", tk.END)
+            self.description_entry.delete("1.0", tk.END)
+            self.credits_entry.delete("1.0", tk.END)
+        else:
+            messagebox.showerror("Error", "No se pudo insertar la canción")
+
+    def view_artists_songs(self):
+        user_id = get_user_id(self.current_user)
+
+        if user_id is None:
+            messagebox.showerror("Ver mis canciones", "Id de usuario no encontrado")
+            return
+
+        password = self.current_password
+        salt = self.current_salt
+        songs = get_artist_songs(user_id, password, salt)
+
+        # Limpiar el Treeview antes de agregar nuevas canciones
+        for item in self.songs_treeview.get_children():
+            self.songs_treeview.delete(item)
+
+        # Agregar las canciones descifradas al Treeview
+        for song in songs:
+            song_name = song['song_name']
+            lyrics = song['lyrics']
+            description = song['description']
+            credits = song['credits']
+            self.songs_treeview.insert("", "end", values=(song_name, lyrics, description, credits))
+
+        # Mostrar el frame de las canciones del artista
+        self.show_frame(self.view_artist_songs_frame)
+
     def on_close(self):
         if messagebox.askokcancel("Salir", "¿Estás seguro que quieres salir?"):
             self.root.destroy()
-
 
 try:
     if __name__ == "__main__":
