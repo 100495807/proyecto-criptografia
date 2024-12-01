@@ -194,15 +194,9 @@ def create_root_ca(user_type):
         x509.BasicConstraints(ca=True, path_length=None), critical=True,
     ).sign(root_key, hashes.SHA256())
 
-    # Guardar la clave y el certificado raíz en los archivos correctos dentro de CERT_FOLDER
+    # Guardar el certificado raíz dentro de CERT_FOLDER
     with open(os.path.join(CERT_FOLDER, 'root_cert.pem'), 'wb') as f:
         f.write(root_cert.public_bytes(serialization.Encoding.PEM))
-    with open(os.path.join(CERT_FOLDER, 'root_key.pem'), 'wb') as f:
-        f.write(root_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        ))
 
     return root_key, root_cert
 
@@ -235,13 +229,7 @@ def create_subordinate_ca(root_key, root_cert, user_type, CERT_FOLDER):
         x509.BasicConstraints(ca=True, path_length=0), critical=True,
     ).sign(root_key, hashes.SHA256())
 
-    # Guardar la clave y el certificado subordinado dentro de CERT_FOLDER
-    with open(os.path.join(CERT_FOLDER, f"{user_type.lower()}_sub_key.pem"), "wb") as f:
-        f.write(sub_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        ))
+    # Guardar el certificado subordinado dentro de CERT_FOLDER
     with open(os.path.join(CERT_FOLDER, f"{user_type.lower()}_sub_cert.pem"), "wb") as f:
         f.write(sub_cert.public_bytes(serialization.Encoding.PEM))
 
@@ -286,19 +274,10 @@ def issue_certificate(sub_key, sub_cert, user_name):
     user_key_path = os.path.join(cert_folder, f"{user_name.lower()}_key.pem")
     user_cert_path = os.path.join(cert_folder, f"{user_name.lower()}_cert.pem")
 
-    # Guardar la clave privada del usuario
-    with open(user_key_path, "wb") as f:
-        f.write(user_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        ))
-
     # Guardar el certificado del usuario
     with open(user_cert_path, "wb") as f:
         f.write(user_cert.public_bytes(serialization.Encoding.PEM))
 
-    print(f"User key and certificate saved in {cert_folder}.")
 
     return user_key, user_cert
 
@@ -376,4 +355,43 @@ def decrypt_private_key(encrypted_private_key_b64, key, nonce):
         return private_key
     except InvalidTag:
         print("Error: Etiqueta inválida.")
+        return None
+
+
+def save_private_key(cert_name, private_key):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+
+    # Convertir la clave privada a formato PEM
+    private_key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    # Guardar la clave privada en la base de datos
+    cursor.execute('''
+    INSERT OR REPLACE INTO private_keys (cert_name, private_key) 
+    VALUES (?, ?)
+    ''', (cert_name, private_key_pem))
+
+    conn.commit()
+    conn.close()
+
+# Función para obtener la clave privada de la base de datos
+def get_private_key_from_db(cert_name):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT private_key FROM private_keys WHERE cert_name = ?
+    ''', (cert_name,))
+    row = cursor.fetchone()
+
+    conn.close()
+
+    if row:
+        private_key_pem = row[0]
+        return serialization.load_pem_private_key(private_key_pem, password=None, backend=default_backend())
+    else:
         return None

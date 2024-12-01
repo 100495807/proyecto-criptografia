@@ -52,8 +52,21 @@ def create_comments_table():
     conn.commit()
     conn.close()
 
+def create_private_keys_table():
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS private_keys (
+        cert_name TEXT PRIMARY KEY,
+        private_key BLOB
+    )
+    ''')
+    conn.commit()
+    conn.close()
+
 
 def create_all_tables():
+    create_private_keys_table()
     create_users_table()
     create_songs_table()
     create_comments_table()
