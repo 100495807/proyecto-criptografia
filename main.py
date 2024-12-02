@@ -10,7 +10,8 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from database import create_all_tables, delete_all_tables
 from query_users import register_user, authenticate_user, get_user_id, delete_songs_by_user_id, \
-    verify_email_recovery, get_user_by_email, update_password, get_username_by_id, get_user_type, get_user_certificate
+    verify_email_recovery, get_user_by_email, update_password, get_username_by_id, get_user_type, \
+    get_user_certificate
 from query_songs import register_song, get_songs_by_user
 from security import hash_password, verify_password, generate_salt, \
     decrypt_aes_gcm, derive_key, generate_rsa_key_pair, create_root_ca, \
@@ -21,13 +22,14 @@ from validation import validate_username, validate_password, validate_phone, val
 from query_comments import add_comment, get_comments, verify_comment, get_private_key
 from insert_song import insert_artist_song, get_artist_songs
 
+
 class UserApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Inicio de sesión y registro")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # Define a style
+        # Define un estilo
         self.style = ttk.Style()
 
         # Estilo para botones
@@ -70,7 +72,6 @@ class UserApp:
         self.view_comments_frame = ttk.Frame(root, style="TFrame")
         self.artist_song_frame = ttk.Frame(root, style="TFrame")
 
-
         self.create_main_frame()
         self.create_login_username_frame()
         self.create_register_frame()
@@ -82,7 +83,6 @@ class UserApp:
         self.create_view_comments_frame()
         self.create_artist_song_frame()
         self.create_view_artist_songs_frame()
-
 
         self.main_frame.pack(fill="both", expand=True)
         self.login_username_frame.pack(fill="both", expand=True)
@@ -353,7 +353,8 @@ class UserApp:
                                              command=lambda: self.show_frame(self.song_frame))
         self.insert_song_button.grid(row=0, column=0, padx=20, pady=20, sticky="ew")
 
-        self.view_songs_button = ttk.Button(self.post_login_frame, text="Ver Canciones", command=self.view_songs)
+        self.view_songs_button = ttk.Button(self.post_login_frame, text="Ver Canciones",
+                                            command=self.view_songs)
         self.view_songs_button.grid(row=0, column=1, padx=20, pady=20, sticky="ew")
 
         self.comment_button = ttk.Button(self.post_login_frame, text="Agregar Comentario",
@@ -376,10 +377,6 @@ class UserApp:
         self.logout_button = ttk.Button(self.post_login_frame, text="Cerrar Sesión",
                                         command=lambda: self.show_frame(self.main_frame))
         self.logout_button.grid(row=3, column=0, columnspan=2, padx=20, pady=20, sticky="ew")
-
-
-
-
 
     def create_view_songs_frame(self):
         self.view_songs_frame = ttk.Frame(self.root)
@@ -445,7 +442,8 @@ class UserApp:
 
         self.comments_treeview = ttk.Treeview(self.view_comments_frame,
                                               columns=(
-                                              "Usuario", "Canción", "Artista", "Comentario", "Firma Verificada"),
+                                                  "Usuario", "Canción", "Artista", "Comentario",
+                                                  "Firma Verificada"),
                                               show="headings")
         self.comments_treeview.heading("Usuario", text="Usuario")
         self.comments_treeview.heading("Canción", text="Canción")
@@ -493,7 +491,7 @@ class UserApp:
         self.insert_song_button.grid(row=4, column=1, columnspan=2, pady=10, sticky="ew")
 
         self.view_my_songs_button = ttk.Button(self.artist_song_frame, text="Ver mis canciones",
-                                                  command=self.view_artists_songs)
+                                               command=self.view_artists_songs)
         self.view_my_songs_button.grid(row=5, column=1, columnspan=2, pady=10, sticky="ew")
 
         self.back_button = ttk.Button(self.artist_song_frame, text="Atrás",
@@ -511,7 +509,8 @@ class UserApp:
         self.view_artist_songs_frame.grid_columnconfigure(6, weight=1)
 
         self.songs_treeview = ttk.Treeview(self.view_artist_songs_frame,
-                                           columns=("Canción", "Letra", "Descripción", "Créditos"), show="headings")
+                                           columns=("Canción", "Letra", "Descripción", "Créditos"),
+                                           show="headings")
         self.songs_treeview.heading("Canción", text="Canción")
         self.songs_treeview.heading("Letra", text="Letra")
         self.songs_treeview.heading("Descripción", text="Descripción")
@@ -532,7 +531,6 @@ class UserApp:
             messagebox.showerror("Error", "Solo los artistas pueden acceder a esta sección")
             return
         self.show_frame(self.artist_song_frame)
-
 
     def login(self):
         username = self.username_entry_login.get()
@@ -584,8 +582,8 @@ class UserApp:
         # Generar claves RSA
         private_key, public_key = generate_rsa_key_pair()
 
-
-        if register_user(username, email, hashed_password, salt, phone, gender, address, private_key, public_key, user_type):
+        if register_user(username, email, hashed_password, salt, phone, gender, address,
+                         private_key, public_key, user_type):
             messagebox.showinfo("Registro", "Usuario registrado")
             self.show_frame(self.login_username_frame)
         else:
@@ -596,7 +594,8 @@ class UserApp:
         author_name = self.author_entry.get()
 
         if not song_name or not author_name:
-            messagebox.showerror("Registrar Canción", "Por favor, ingrese el nombre de la canción y el autor")
+            messagebox.showerror("Registrar Canción",
+                                 "Por favor, ingrese el nombre de la canción y el autor")
             return
 
         user_id = get_user_id(self.current_user)
@@ -605,7 +604,8 @@ class UserApp:
             return
 
         try:
-            if not register_song(user_id, song_name, author_name, self.current_password, self.current_salt):
+            if not register_song(user_id, song_name, author_name, self.current_password,
+                                 self.current_salt):
                 raise ValueError("Error al registrar la canción")
 
             messagebox.showinfo("Registrar Canción", "Canción registrada")
@@ -679,7 +679,7 @@ class UserApp:
         self.verification_code = ''.join(
             random.choices(string.ascii_uppercase + string.digits, k=6))
 
-        #Enviar el código de verificación por email
+        # Enviar el código de verificación por email
         try:
             smtp_server = 'smtp.gmail.com'
             smtp_port = 587
@@ -781,19 +781,22 @@ class UserApp:
             messagebox.showerror("Agregar comentario", "Id de usuario no encontrado")
             return
 
+        # Obtener la clave privada del usuario
         private_key_pem = get_private_key(user_id, self.current_password, self.current_salt)
         if private_key_pem is None:
             messagebox.showerror("Agregar comentario", "Clave privada no encontrada")
             return
 
-        if add_comment(user_id, song_name, author_name, comment, private_key_pem, self.current_password,
+        if add_comment(user_id, song_name, author_name, comment, private_key_pem,
+                       self.current_password,
                        self.current_salt):
             messagebox.showinfo("Agregar comentario", "Comentario agregado")
             self.song_name_comment_entry.delete(0, tk.END)
             self.author_comment_entry.delete(0, tk.END)
             self.comment_entry.delete(0, tk.END)
         else:
-            messagebox.showerror("Agregar comentario", "Error al agregar comentario o la canción no está registrada")
+            messagebox.showerror("Agregar comentario",
+                                 "Error al agregar comentario o la canción no está registrada")
 
     def verify_comments(self, song_id):
         comments = get_comments(song_id)  # Obtener comentarios de la canción
@@ -801,7 +804,6 @@ class UserApp:
             print(f"Verificando comentario: {comment}")
             user_cert = get_user_certificate(user_id)  # Obtener el certificado del usuario
             print(f"Certificado del usuario {user_id} cargado.")
-
 
             # Verificar la firma del comentario con la clave pública
             is_verified = verify_comment(user_id, comment, signature)
@@ -820,8 +822,7 @@ class UserApp:
         comments = get_comments()
 
         for user_id, song_name, author_name, comment, signature in comments:
-            username = get_username_by_id(user_id)  # Obtener el nombre del usuario
-
+            username = get_username_by_id(user_id)
 
             # Verificar si el comentario está firmado correctamente
             is_verified = verify_comment(user_id, comment, signature)
@@ -942,7 +943,6 @@ class UserApp:
             f.write(user_cert.public_bytes(encoding=serialization.Encoding.PEM))
         print(f"Certificado para {username} guardado correctamente.")
 
-
     def insert_artist_song(self):
         song_name = self.song_name_entry.get()
         lyrics = self.lyrics_entry.get("1.0", tk.END).strip()
@@ -1001,6 +1001,7 @@ class UserApp:
     def on_close(self):
         if messagebox.askokcancel("Salir", "¿Estás seguro que quieres salir?"):
             self.root.destroy()
+
 
 try:
     if __name__ == "__main__":

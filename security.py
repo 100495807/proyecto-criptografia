@@ -1,7 +1,7 @@
 import os
 import sqlite3
 import base64
-from cryptography.hazmat.primitives import hashes, serialization, hashes
+from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -18,8 +18,10 @@ def create_connection():
     conn = sqlite3.connect(db_path)
     return conn
 
+
 def generate_salt():
     return os.urandom(16)
+
 
 def hash_password(password, salt):
     kdf = PBKDF2HMAC(
@@ -31,6 +33,7 @@ def hash_password(password, salt):
     )
     hashed_password = kdf.derive(password.encode())
     return hashed_password, salt
+
 
 def verify_password(stored_password, provided_password, salt):
     kdf = PBKDF2HMAC(
@@ -47,11 +50,13 @@ def verify_password(stored_password, provided_password, salt):
     except InvalidKey:
         return False
 
+
 def generate_key():
     """Genera una clave aleatoria de 32 bytes para AES."""
-    key= os.urandom(32)
-    print(f"Clave generada (AES): {base64.b64encode(key).decode()} - Longitud: {len(key)*8} bits")
+    key = os.urandom(32)
+    print(f"Clave generada (AES): {base64.b64encode(key).decode()} - Longitud: {len(key) * 8} bits")
     return key
+
 
 def derive_key(password, salt):
     """Deriva una clave usando PBKDF2HMAC con SHA-256."""
@@ -63,6 +68,7 @@ def derive_key(password, salt):
         backend=default_backend()
     )
     return kdf.derive(password.encode())
+
 
 def encrypt_aes_gcm(plain_text, key, nonce):
     cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
@@ -76,6 +82,7 @@ def encrypt_aes_gcm(plain_text, key, nonce):
           f"Nonce: {base64.b64encode(nonce).decode()}")
     return base64.b64encode(nonce + tag + cipher_text).decode('utf-8')
 
+
 def decrypt_aes_gcm(cipher_text_b64, key, nonce):
     cipher_text = base64.b64decode(cipher_text_b64)
     tag = cipher_text[12:28]
@@ -84,8 +91,9 @@ def decrypt_aes_gcm(cipher_text_b64, key, nonce):
     decryptor = cipher.decryptor()
     try:
         plain_text = decryptor.update(cipher_text) + decryptor.finalize()
-        print(f"Descifrado AES-GCM: Texto cifrado: {cipher_text_b64} | Clave: {len(key) * 8} bits | "
-              f"Etiqueta: {base64.b64encode(tag).decode()} | Texto plano: '{plain_text.decode()}'")
+        print(
+            f"Descifrado AES-GCM: Texto cifrado: {cipher_text_b64} | Clave: {len(key) * 8} bits | "
+            f"Etiqueta: {base64.b64encode(tag).decode()} | Texto plano: '{plain_text.decode()}'")
         return plain_text.decode()
     except InvalidTag:
         print("Error: Etiqueta inválida.")
@@ -160,6 +168,7 @@ def verify_comment_signature(public_key_pem, comment, signature):
         return True
     except InvalidSignature:
         return False
+
 
 def create_root_ca(user_type):
     CERT_FOLDER = "certificados"
@@ -237,14 +246,14 @@ def create_subordinate_ca(root_key, root_cert, user_type, CERT_FOLDER):
 
 
 def issue_certificate(sub_key, sub_cert, user_name):
-    # Generate private key for user
+    # Generar clave privada para el usuario
     user_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
     )
     print(f"{user_name} private key generated. Algorithm: RSA, Key length: 2048 bits")
 
-    # Create a certificate for the user signed by the subordinate CA
+    # Crear el certificado para el usuario firmado por la CA subordinada
     subject = x509.Name([
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "User"),
         x509.NameAttribute(NameOID.COMMON_NAME, user_name),
@@ -271,28 +280,22 @@ def issue_certificate(sub_key, sub_cert, user_name):
     os.makedirs(cert_folder, exist_ok=True)
 
     # Ruta de los archivos dentro de la carpeta 'certificados'
-    user_key_path = os.path.join(cert_folder, f"{user_name.lower()}_key.pem")
     user_cert_path = os.path.join(cert_folder, f"{user_name.lower()}_cert.pem")
 
     # Guardar el certificado del usuario
     with open(user_cert_path, "wb") as f:
         f.write(user_cert.public_bytes(serialization.Encoding.PEM))
 
-
     return user_key, user_cert
 
-import datetime
 
 def verify_certificate(cert):
     try:
-        # Comprobar que el certificado no haya expirado usando timezone-aware datetime
-        current_time = datetime.datetime.now(datetime.timezone.utc)  # Usando UTC con timezone-aware datetime
+        current_time = datetime.datetime.now(
+            datetime.timezone.utc)
         if cert.not_valid_before_utc > current_time or cert.not_valid_after_utc < current_time:
             print(f"El certificado ha expirado o no es válido aún.")
             return False
-
-        # Aquí podrías agregar otras verificaciones, como comprobar la firma
-        # del certificado usando la clave pública de la CA o cualquier otra cosa.
         print("Certificado válido.")
         return True
     except Exception as e:
@@ -305,7 +308,6 @@ def delete_pem_files(directory=None):
     if directory is None:
         directory = os.getcwd()
 
-    # Iterar a través de los archivos en el directorio
     for filename in os.listdir(directory):
         # Comprobar si el archivo tiene extensión .pem
         if filename.endswith(".pem"):
@@ -378,6 +380,7 @@ def save_private_key(cert_name, private_key):
     conn.commit()
     conn.close()
 
+
 # Función para obtener la clave privada de la base de datos
 def get_private_key_from_db(cert_name):
     conn = sqlite3.connect('database.db')
@@ -392,6 +395,7 @@ def get_private_key_from_db(cert_name):
 
     if row:
         private_key_pem = row[0]
-        return serialization.load_pem_private_key(private_key_pem, password=None, backend=default_backend())
+        return serialization.load_pem_private_key(private_key_pem, password=None,
+                                                  backend=default_backend())
     else:
         return None

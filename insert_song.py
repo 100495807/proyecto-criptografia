@@ -3,7 +3,7 @@ from security import create_connection, encrypt_aes_gcm, derive_key, decrypt_aes
 
 
 def insert_artist_song(user_id, song_name, lyrics, description, credits, password, salt):
-    # Derivar la clave de cifrado a partir de la contraseña y la sal
+    # Derivar la clave de cifrado a partir de la contraseña y la salt
     key = derive_key(password, salt)
 
     # Generar nonces para cada campo
