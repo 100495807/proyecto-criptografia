@@ -1,8 +1,6 @@
 import os
 import sqlite3
-
 from cryptography import x509
-
 from security import create_connection, encrypt_private_key
 
 

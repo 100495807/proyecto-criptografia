@@ -1,10 +1,25 @@
-from security import create_connection
+import sqlite3
+import os
 
+class Database:
+    def __init__(self, db_name='database.db'):
+        base_dir = os.path.dirname(__file__)
+        self.db_path = os.path.join(base_dir, db_name)
+        self.conn = None
 
-def create_users_table():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
+    def create_connection(self):
+        self.conn = sqlite3.connect(self.db_path)
+        return self.conn
+
+    def close_connection(self):
+        if self.conn:
+            self.conn.close()
+
+    def create_all_tables(self):
+        self.create_connection()
+        cursor = self.conn.cursor()
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
         email TEXT NOT NULL UNIQUE,
@@ -17,15 +32,10 @@ def create_users_table():
         nonce BLOB NOT NULL,
         public_key BLOB NOT NULL,
         user_type TEXT NOT NULL
-    )''')
-    conn.commit()
-    conn.close()
-
-
-def create_songs_table():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS songs (
+        )
+        ''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS songs (
         id INTEGER PRIMARY KEY,
         user_id INTEGER,
         encrypted_song_name BLOB NOT NULL,
@@ -34,14 +44,10 @@ def create_songs_table():
         nonce_author BLOB NOT NULL,
         song_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
-    )''')
-    conn.commit()
-    conn.close()
-
-def create_comments_table():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS comments (
+        )
+        ''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS comments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
         song_name TEXT NOT NULL,
@@ -50,32 +56,10 @@ def create_comments_table():
         signature BLOB,
         com_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
-    )''')
-    conn.commit()
-    conn.close()
-
-def create_private_keys_table():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS private_keys (
-        cert_name TEXT PRIMARY KEY,
-        private_key BLOB
-    )
-    ''')
-    conn.commit()
-    conn.close()
-
-
-import sqlite3
-
-
-def create_artist_songs_table():
-    conn = create_connection()
-    cursor = conn.cursor()
-
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS artist_songs (
+        )
+        ''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS artist_songs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         song_name TEXT NOT NULL,
@@ -88,37 +72,24 @@ def create_artist_songs_table():
         nonce_credits BLOB NOT NULL,
         artist_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
-    )
-    ''')
+                )
+                ''')
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS private_keys (
+        cert_name TEXT PRIMARY KEY,
+        private_key BLOB
+        )
+        ''')
+        self.conn.commit()
+        self.close_connection()
 
-    conn.commit()
-    conn.close()
-
-
-# Llamar a la función para crear la tabla
-create_artist_songs_table()
-
-
-def create_all_tables():
-    create_private_keys_table()
-    create_users_table()
-    create_songs_table()
-    create_comments_table()
-    create_artist_songs_table()
-
-
-def delete_all_tables():
-    conn = create_connection()
-    cursor = conn.cursor()
-    cursor.execute('DROP TABLE IF EXISTS users')
-    cursor.execute('DROP TABLE IF EXISTS songs')
-    cursor.execute('DROP TABLE IF EXISTS comments')
-    cursor.execute('DROP TABLE IF EXISTS private_keys')
-    cursor.execute('DROP TABLE IF EXISTS artist_songs')
-    conn.commit()
-    conn.close()
-
-
-
-
-
+    def delete_all_tables(self):
+        self.create_connection()
+        cursor = self.conn.cursor()
+        cursor.execute('DROP TABLE IF EXISTS users')
+        cursor.execute('DROP TABLE IF EXISTS songs')
+        cursor.execute('DROP TABLE IF EXISTS comments')
+        cursor.execute('DROP TABLE IF EXISTS artist_songs')
+        cursor.execute('DROP TABLE IF EXISTS private_keys')
+        self.conn.commit()
+        self.close_connection()
