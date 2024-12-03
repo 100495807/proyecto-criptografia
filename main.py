@@ -860,6 +860,7 @@ class UserApp:
             save_private_key('root_key', root_key)
             with open(root_cert_path, 'wb') as f:
                 f.write(root_cert.public_bytes(serialization.Encoding.PEM))
+        print("Certificado raíz cargado correctamente.")
 
         # Verificar si el certificado subordinado de oyente y su clave privada existen en la base de datos
         oyente_sub_key = get_private_key_from_db('oyente_sub_key')
@@ -874,6 +875,7 @@ class UserApp:
             save_private_key('oyente_sub_key', oyente_sub_key)
             with open(oyente_sub_cert_path, 'wb') as f:
                 f.write(oyente_sub_cert.public_bytes(serialization.Encoding.PEM))
+        print("Certificado subordinado de oyente cargado correctamente.")
 
         # Verificar si el certificado subordinado de artista y su clave privada existen en la base de datos
         artista_sub_key = get_private_key_from_db('artista_sub_key')
@@ -888,6 +890,7 @@ class UserApp:
             save_private_key('artista_sub_key', artista_sub_key)
             with open(artista_sub_cert_path, 'wb') as f:
                 f.write(artista_sub_cert.public_bytes(serialization.Encoding.PEM))
+        print("Certificado subordinado de artista cargado correctamente.")
     def issue_user_certificate(self):
         CERT_FOLDER = "certificados"
 
@@ -1000,7 +1003,6 @@ class UserApp:
 
 try:
     if __name__ == "__main__":
-        delete_all_tables()
         root = tk.Tk()
         app = UserApp(root)
         create_all_tables()
@@ -1009,3 +1011,4 @@ try:
         root.mainloop()
 except KeyboardInterrupt:
     print("Ejecución detenida.")
+

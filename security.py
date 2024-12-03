@@ -165,8 +165,10 @@ def verify_comment_signature(public_key_pem, comment, signature):
             ),
             hashes.SHA256()
         )
+        print("Firma verificada correctamente.")
         return True
     except InvalidSignature:
+        print("La firma no es válida.")
         return False
 
 
