@@ -69,9 +69,9 @@ class CertificateManager:
 
         # Comprobar si el certificado raíz ya existe en la carpeta
         if not os.path.exists(root_cert_path) or not root_key:
+            print("Certificado raíz o clave no encontrados. Creando ambos...")
             if os.path.exists(root_cert_path):
                 os.remove(root_cert_path)
-            print("Certificado raíz o clave no encontrados. Creando ambos...")
             root_key, root_cert = create_root_ca("Root")
             save_private_key('root_key', root_key)
             with open(root_cert_path, 'wb') as f:
@@ -82,9 +82,9 @@ class CertificateManager:
         oyente_sub_key = get_private_key_from_db('oyente_sub_key')
 
         if not os.path.exists(oyente_sub_cert_path) or not oyente_sub_key:
+            print("Certificado subordinado de oyente o clave no encontrados. Creando ambos...")
             if os.path.exists(oyente_sub_cert_path):
                 os.remove(oyente_sub_cert_path)
-            print("Certificado subordinado de oyente o clave no encontrados. Creando ambos...")
             oyente_sub_key, oyente_sub_cert = create_subordinate_ca(root_key, root_cert, "Oyente", self.cert_folder)
             save_private_key('oyente_sub_key', oyente_sub_key)
             with open(oyente_sub_cert_path, 'wb') as f:
@@ -95,9 +95,9 @@ class CertificateManager:
         artista_sub_key = get_private_key_from_db('artista_sub_key')
 
         if not os.path.exists(artista_sub_cert_path) or not artista_sub_key:
+            print("Certificado subordinado de artista o clave no encontrados. Creando ambos...")
             if os.path.exists(artista_sub_cert_path):
                 os.remove(artista_sub_cert_path)
-            print("Certificado subordinado de artista o clave no encontrados. Creando ambos...")
             artista_sub_key, artista_sub_cert = create_subordinate_ca(root_key, root_cert, "Artista", self.cert_folder)
             save_private_key('artista_sub_key', artista_sub_key)
             with open(artista_sub_cert_path, 'wb') as f:

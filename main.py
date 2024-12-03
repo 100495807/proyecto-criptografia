@@ -819,7 +819,6 @@ class UserApp:
 
         for user_id, song_name, author_name, comment, signature, com_salt in comments:
             username = get_username_by_id(user_id)
-
             # Verificar si el comentario está firmado correctamente
             is_verified = verify_comment(user_id, comment, signature)
             verification_status = "Sí" if is_verified else "No"
