@@ -1,8 +1,8 @@
 import os
-from security import encrypt_aes_gcm, decrypt_aes_gcm, derive_key, create_connection
+from security import encrypt_aes_gcm, decrypt_aes_gcm, derive_key, create_connection, generate_salt
 
 
-def register_song(user_id, song_name, author_name, password, salt):
+def register_song(user_id, song_name, author_name, password):
     conn = create_connection()
     cursor = conn.cursor()
 
@@ -10,7 +10,8 @@ def register_song(user_id, song_name, author_name, password, salt):
     cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author FROM songs WHERE user_id = ?', (user_id,))
     songs = cursor.fetchall()
 
-    key = derive_key(password, salt)
+    song_salt = generate_salt()
+    key = derive_key(password, song_salt)
 
     # Descifrar las canciones y verificar si la canción ya existe
     for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author in songs:
@@ -28,8 +29,8 @@ def register_song(user_id, song_name, author_name, password, salt):
 
     # Insertar la canción en la base de datos
     cursor.execute(
-        'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author) VALUES (?, ?, ?, ?, ?)',
-        (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author)
+        'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt) VALUES (?, ?, ?, ?, ?, ?)',
+        (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt)
     )
     conn.commit()
     conn.close()
@@ -57,20 +58,20 @@ def get_encrypted_song(user_id, encrypted_song_name):
 def get_songs_by_user(user_id):
     conn = create_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author FROM songs WHERE '
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt FROM songs WHERE '
                    'user_id = ?', (user_id,))
     songs = cursor.fetchall()
     conn.close()
     return songs
 
 
-def get_songs(user_id, password, salt):
+def get_songs(user_id, password):
     """Recupera y descifra las canciones del usuario."""
-    key = derive_key(password, salt)
     songs = get_songs_by_user(user_id)
 
     decrypted_songs = []
-    for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author in songs:
+    for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt in songs:
+        key = derive_key(password, song_salt)
         if encrypted_song_name and encrypted_author_name and key:
             song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
             author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)

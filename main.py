@@ -508,18 +508,18 @@ class UserApp:
         self.view_artist_songs_frame.grid_columnconfigure(5, weight=1)
         self.view_artist_songs_frame.grid_columnconfigure(6, weight=1)
 
-        self.songs_treeview = ttk.Treeview(self.view_artist_songs_frame,
+        self.artist_songs_treeview = ttk.Treeview(self.view_artist_songs_frame,
                                            columns=("Canción", "Letra", "Descripción", "Créditos"),
                                            show="headings")
-        self.songs_treeview.heading("Canción", text="Canción")
-        self.songs_treeview.heading("Letra", text="Letra")
-        self.songs_treeview.heading("Descripción", text="Descripción")
-        self.songs_treeview.heading("Créditos", text="Créditos")
-        self.songs_treeview.column("Canción", anchor="center")
-        self.songs_treeview.column("Letra", anchor="center")
-        self.songs_treeview.column("Descripción", anchor="center")
-        self.songs_treeview.column("Créditos", anchor="center")
-        self.songs_treeview.grid(row=0, column=1, columnspan=5, padx=20, pady=20, sticky="ew")
+        self.artist_songs_treeview.heading("Canción", text="Canción")
+        self.artist_songs_treeview.heading("Letra", text="Letra")
+        self.artist_songs_treeview.heading("Descripción", text="Descripción")
+        self.artist_songs_treeview.heading("Créditos", text="Créditos")
+        self.artist_songs_treeview.column("Canción", anchor="center")
+        self.artist_songs_treeview.column("Letra", anchor="center")
+        self.artist_songs_treeview.column("Descripción", anchor="center")
+        self.artist_songs_treeview.column("Créditos", anchor="center")
+        self.artist_songs_treeview.grid(row=0, column=1, columnspan=5, padx=20, pady=20, sticky="ew")
 
         self.back_button = ttk.Button(self.view_artist_songs_frame, text="Atrás",
                                       command=lambda: self.show_frame(self.artist_song_frame))
@@ -604,8 +604,7 @@ class UserApp:
             return
 
         try:
-            if not register_song(user_id, song_name, author_name, self.current_password,
-                                 self.current_salt):
+            if not register_song(user_id, song_name, author_name, self.current_password):
                 raise ValueError("Error al registrar la canción")
 
             messagebox.showinfo("Registrar Canción", "Canción registrada")
@@ -631,10 +630,10 @@ class UserApp:
             return
 
         song = random.choice(songs)
-        encrypted_song_name, encrypted_author_name, nonce_song, nonce_author = song
+        encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt = song
 
         try:
-            key = derive_key(self.current_password, self.current_salt)
+            key = derive_key(self.current_password, song_salt)
             song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
             author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
             messagebox.showinfo("Escuchar Canción", f"Escuchando '{song_name}' de "
@@ -760,9 +759,9 @@ class UserApp:
         songs = get_songs_by_user(user_id)
 
         # Desciframos las canciones y las mostramos en el treeview
-        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author in songs:
+        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt in songs:
             try:
-                key = derive_key(self.current_password, self.current_salt)
+                key = derive_key(self.current_password, song_salt)
                 song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
                 author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
                 self.songs_treeview.insert("", "end", values=(song_name, author_name))
@@ -788,8 +787,7 @@ class UserApp:
             return
 
         if add_comment(user_id, song_name, author_name, comment, private_key_pem,
-                       self.current_password,
-                       self.current_salt):
+                       self.current_password):
             messagebox.showinfo("Agregar comentario", "Comentario agregado")
             self.song_name_comment_entry.delete(0, tk.END)
             self.author_comment_entry.delete(0, tk.END)
@@ -821,7 +819,7 @@ class UserApp:
         # Obtener todos los comentarios
         comments = get_comments()
 
-        for user_id, song_name, author_name, comment, signature in comments:
+        for user_id, song_name, author_name, comment, signature, com_salt in comments:
             username = get_username_by_id(user_id)
 
             # Verificar si el comentario está firmado correctamente
@@ -854,43 +852,42 @@ class UserApp:
 
         # Comprobar si el certificado raíz ya existe en la carpeta
         if not os.path.exists(root_cert_path) or not root_key:
+            if os.path.exists(root_cert_path):
+                os.remove(root_cert_path)
             print(
-                "Certificado raíz no encontrado. Creando certificado raíz...")
+                "Certificado raíz o clave no encontrados. Creando ambos...")
             root_key, root_cert = create_root_ca("Root")
             save_private_key('root_key', root_key)
-
-            # Guardar el certificado raíz
             with open(root_cert_path, 'wb') as f:
-                f.write(root_cert.public_bytes(encoding=serialization.Encoding.PEM))
+                f.write(root_cert.public_bytes(serialization.Encoding.PEM))
 
-            print("Certificado raíz creado correctamente.")
-        else:
-            print("Certificado raíz encontrado.")
-            # Cargar el certificado raíz desde la carpeta
-            root_cert = x509.load_pem_x509_certificate(open(root_cert_path, 'rb').read(),
-                                                       default_backend())
-
-        # Verificar si los certificados subordinados existen
+        # Verificar si el certificado subordinado de oyente y su clave privada existen en la base de datos
         oyente_sub_key = get_private_key_from_db('oyente_sub_key')
-        artista_sub_key = get_private_key_from_db('artista_sub_key')
 
-        if not oyente_sub_key or not os.path.exists(oyente_sub_cert_path):
-            print("Creando certificado subordinado para Oyentes...")
+        if not os.path.exists(oyente_sub_cert_path) or not oyente_sub_key:
+            if os.path.exists(oyente_sub_cert_path):
+                os.remove(oyente_sub_cert_path)
+            print(
+                "Certificado subordinado de oyente o clave no encontrados. Creando ambos...")
             oyente_sub_key, oyente_sub_cert = create_subordinate_ca(root_key, root_cert, "Oyente",
                                                                     CERT_FOLDER)
             save_private_key('oyente_sub_key', oyente_sub_key)
-            print("Certificado subordinado de Oyente creado correctamente.")
-        else:
-            print("Certificado subordinado de Oyente encontrado.")
+            with open(oyente_sub_cert_path, 'wb') as f:
+                f.write(oyente_sub_cert.public_bytes(serialization.Encoding.PEM))
 
-        if not artista_sub_key or not os.path.exists(artista_sub_cert_path):
-            print("Creando certificado subordinado para Artistas...")
+        # Verificar si el certificado subordinado de artista y su clave privada existen en la base de datos
+        artista_sub_key = get_private_key_from_db('artista_sub_key')
+
+        if not os.path.exists(artista_sub_cert_path) or not artista_sub_key:
+            if os.path.exists(artista_sub_cert_path):
+                os.remove(artista_sub_cert_path)
+            print(
+                "Certificado subordinado de artista o clave no encontrados. Creando ambos...")
             artista_sub_key, artista_sub_cert = create_subordinate_ca(root_key, root_cert,
                                                                       "Artista", CERT_FOLDER)
             save_private_key('artista_sub_key', artista_sub_key)
-        else:
-            print("Certificado subordinado de Artista encontrado.")
-
+            with open(artista_sub_cert_path, 'wb') as f:
+                f.write(artista_sub_cert.public_bytes(serialization.Encoding.PEM))
     def issue_user_certificate(self):
         CERT_FOLDER = "certificados"
 
@@ -958,12 +955,11 @@ class UserApp:
             messagebox.showerror("Error", "Usuario no encontrado")
             return
 
-        # Obtener la contraseña y el salt del usuario actual
+        # Obtener la contraseña del usuario actual
         password = self.current_password
-        salt = self.current_salt
 
         # Insertar la canción en la base de datos
-        if insert_artist_song(user_id, song_name, lyrics, description, credits, password, salt):
+        if insert_artist_song(user_id, song_name, lyrics, description, credits, password):
             messagebox.showinfo("Éxito", "Canción insertada correctamente")
             self.song_name_entry.delete(0, tk.END)
             self.lyrics_entry.delete("1.0", tk.END)
@@ -980,12 +976,11 @@ class UserApp:
             return
 
         password = self.current_password
-        salt = self.current_salt
-        songs = get_artist_songs(user_id, password, salt)
+        songs = get_artist_songs(user_id, password)
 
         # Limpiar el Treeview antes de agregar nuevas canciones
-        for item in self.songs_treeview.get_children():
-            self.songs_treeview.delete(item)
+        for item in self.artist_songs_treeview.get_children():
+            self.artist_songs_treeview.delete(item)
 
         # Agregar las canciones descifradas al Treeview
         for song in songs:
@@ -993,7 +988,7 @@ class UserApp:
             lyrics = song['lyrics']
             description = song['description']
             credits = song['credits']
-            self.songs_treeview.insert("", "end", values=(song_name, lyrics, description, credits))
+            self.artist_songs_treeview.insert("", "end", values=(song_name, lyrics, description, credits))
 
         # Mostrar el frame de las canciones del artista
         self.show_frame(self.view_artist_songs_frame)
@@ -1005,6 +1000,7 @@ class UserApp:
 
 try:
     if __name__ == "__main__":
+        delete_all_tables()
         root = tk.Tk()
         app = UserApp(root)
         create_all_tables()

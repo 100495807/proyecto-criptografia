@@ -32,6 +32,7 @@ def create_songs_table():
         encrypted_author_name BLOB NOT NULL,
         nonce_song BLOB NOT NULL,
         nonce_author BLOB NOT NULL,
+        song_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )''')
     conn.commit()
@@ -47,6 +48,7 @@ def create_comments_table():
         author_name TEXT NOT NULL,
         comment TEXT NOT NULL,
         signature BLOB,
+        com_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )''')
     conn.commit()
@@ -84,6 +86,7 @@ def create_artist_songs_table():
         nonce_lyrics BLOB NOT NULL,
         nonce_description BLOB NOT NULL,
         nonce_credits BLOB NOT NULL,
+        artist_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )
     ''')

@@ -8,18 +8,19 @@ from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 from query_users import get_user_certificate, get_username_by_id
 from security import create_connection, sign_comment, verify_comment_signature, decrypt_aes_gcm, \
-    derive_key, verify_certificate, decrypt_private_key
+    derive_key, verify_certificate, decrypt_private_key, generate_salt
 from query_songs import get_songs_by_user
 
 
-def add_comment(user_id, song_name, author_name, comment, private_key_pem, password, salt):
+def add_comment(user_id, song_name, author_name, comment, private_key_pem, password):
+    com_salt = generate_salt()
     # Verificar si la canción ya está registrada por el usuario
     songs = get_songs_by_user(user_id)
-    key = derive_key(password, salt)
+    key = derive_key(password, com_salt)
     song_exists = any(
         decrypt_aes_gcm(encrypted_song_name, key, nonce_song) == song_name and
         decrypt_aes_gcm(encrypted_author_name, key, nonce_author) == author_name
-        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author in songs
+        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt in songs
     )
 
     if song_exists:
@@ -30,8 +31,8 @@ def add_comment(user_id, song_name, author_name, comment, private_key_pem, passw
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute \
-        ('INSERT INTO comments (user_id, song_name, author_name, comment, signature) VALUES (?, ?, ?, ?, ?)',
-         (user_id, song_name, author_name, comment, signature))
+        ('INSERT INTO comments (user_id, song_name, author_name, comment, signature, com_salt) VALUES (?, ?, ?, ?, ?, ?)',
+         (user_id, song_name, author_name, comment, signature, com_salt))
     conn.commit()
     conn.close()
     return True
@@ -42,10 +43,10 @@ def get_comments(song_id=None):
     cursor = conn.cursor()
     if song_id:
         cursor.execute \
-            ('SELECT user_id, song_name, author_name, comment, signature FROM comments WHERE id = ?',
+            ('SELECT user_id, song_name, author_name, comment, signature, com_salt FROM comments WHERE id = ?',
              (song_id,))
     else:
-        cursor.execute('SELECT user_id, song_name, author_name, comment, signature FROM comments')
+        cursor.execute('SELECT user_id, song_name, author_name, comment, signature, com_salt FROM comments')
     comments = cursor.fetchall()
     conn.close()
     return comments
@@ -109,3 +110,4 @@ def get_private_key(user_id, password, salt):
         return private_key_pem
     else:
         return None
+

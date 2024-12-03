@@ -1,10 +1,11 @@
 import os
-from security import create_connection, encrypt_aes_gcm, derive_key, decrypt_aes_gcm
+from security import create_connection, encrypt_aes_gcm, derive_key, decrypt_aes_gcm, generate_salt
 
 
-def insert_artist_song(user_id, song_name, lyrics, description, credits, password, salt):
+def insert_artist_song(user_id, song_name, lyrics, description, credits, password):
     # Derivar la clave de cifrado a partir de la contraseña y la salt
-    key = derive_key(password, salt)
+    artist_salt = generate_salt()
+    key = derive_key(password, artist_salt)
 
     # Generar nonces para cada campo
     nonce_song = os.urandom(12)
@@ -22,34 +23,32 @@ def insert_artist_song(user_id, song_name, lyrics, description, credits, passwor
     conn = create_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO artist_songs (user_id, song_name, lyrics, description, credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, encrypted_song_name, encrypted_lyrics, encrypted_description, encrypted_credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits))
+        INSERT INTO artist_songs (user_id, song_name, lyrics, description, credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits, artist_salt)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (user_id, encrypted_song_name, encrypted_lyrics, encrypted_description, encrypted_credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits, artist_salt))
     conn.commit()
     conn.close()
 
     return True
 
 
-def get_artist_songs(user_id, password, salt):
+def get_artist_songs(user_id, password):
     conn = create_connection()
     cursor = conn.cursor()
 
     cursor.execute('''
-    SELECT song_name, lyrics, description, credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits
+    SELECT song_name, lyrics, description, credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits, artist_salt
     FROM artist_songs
     WHERE user_id = ?
     ''', (user_id,))
 
     encrypted_songs = cursor.fetchall()
     conn.close()
-
-    key = derive_key(password, salt)
     decrypted_songs = []
 
     for encrypted_song in encrypted_songs:
-        encrypted_song_name, encrypted_lyrics, encrypted_description, encrypted_credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits = encrypted_song
-
+        encrypted_song_name, encrypted_lyrics, encrypted_description, encrypted_credits, nonce_song, nonce_lyrics, nonce_description, nonce_credits, artist_salt = encrypted_song
+        key = derive_key(password, artist_salt)
         song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
         lyrics = decrypt_aes_gcm(encrypted_lyrics, key, nonce_lyrics)
         description = decrypt_aes_gcm(encrypted_description, key, nonce_description)
