@@ -1,7 +1,7 @@
 import os
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from query_users import get_user_certificate, get_username_by_id
+from query_users import get_user_certificate, get_username_by_id, get_user_type
 from security import create_connection, sign_comment, verify_comment_signature, decrypt_aes_gcm, \
     derive_key, verify_certificate, decrypt_private_key, generate_salt
 from query_songs import get_songs_by_user
@@ -66,8 +66,26 @@ def verify_comment(user_id, comment, signature):
     # Cargar el certificado del usuario
     user_cert = x509.load_pem_x509_certificate(cert_pem, backend=default_backend())
 
+    user_type = get_user_type(username)
+    if user_type == "Oyente":
+        sub_cert_path = "certificados/oyente_sub_cert.pem"
+    elif user_type == "Artista":
+        sub_cert_path = "certificados/artista_sub_cert.pem"
+    else:
+        print(f"Tipo de usuario desconocido: {user_type}")
+        return False
+
+    if not os.path.exists(sub_cert_path):
+        print(f"El certificado subordinado correspondiente ({sub_cert_path}) no se encuentra.")
+        return False
+
+    with open(sub_cert_path, 'rb') as sub_cert_file:
+        sub_cert_pem = sub_cert_file.read()
+    sub_cert = x509.load_pem_x509_certificate(sub_cert_pem, backend=default_backend())
+
+
     # Verificar la validez del certificado
-    if not verify_certificate(user_cert):
+    if not verify_certificate(user_cert, sub_cert):
         return False  # Si el certificado no es válido, no verificamos la firma
 
     # Obtener la clave pública desde la base de datos

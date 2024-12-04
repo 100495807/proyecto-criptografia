@@ -291,14 +291,16 @@ def issue_certificate(sub_key, sub_cert, user_name):
     return user_key, user_cert
 
 
-def verify_certificate(cert):
+def verify_certificate(user_cert, sub_cert):
     try:
-        current_time = datetime.datetime.now(
-            datetime.timezone.utc)
-        if cert.not_valid_before_utc > current_time or cert.not_valid_after_utc < current_time:
-            print(f"El certificado ha expirado o no es válido aún.")
-            return False
-        print("Certificado válido.")
+        # Verificar si el certificado fue firmado por el certificado subordinado
+        sub_cert.public_key().verify(
+            user_cert.signature,
+            user_cert.tbs_certificate_bytes,
+            padding.PKCS1v15(),
+            user_cert.signature_hash_algorithm
+        )
+        print("Certificado emitido correctamente por el subordinado.")
         return True
     except Exception as e:
         print(f"Error al verificar el certificado: {e}")

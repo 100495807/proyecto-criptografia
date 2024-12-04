@@ -899,7 +899,6 @@ try:
     if __name__ == "__main__":
         root = tk.Tk()
         app = UserApp(root)
-        database.delete_all_tables()
         database.create_all_tables()
         cert_manager.initialize_certificates()
         root.geometry("600x500")
