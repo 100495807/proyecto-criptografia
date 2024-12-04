@@ -817,7 +817,7 @@ class UserApp:
         # Obtener todos los comentarios
         comments = get_comments()
 
-        for user_id, song_name, author_name, comment, signature, com_salt in comments:
+        for user_id, song_name, author_name, comment, signature in comments:
             username = get_username_by_id(user_id)
             # Verificar si el comentario está firmado correctamente
             is_verified = verify_comment(user_id, comment, signature)

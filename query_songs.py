@@ -7,14 +7,14 @@ def register_song(user_id, song_name, author_name, password):
     cursor = conn.cursor()
 
     # Seleccionar todas las canciones del usuario
-    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author FROM songs WHERE user_id = ?', (user_id,))
+    cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt FROM songs WHERE user_id = ?', (user_id,))
     songs = cursor.fetchall()
 
-    song_salt = generate_salt()
-    key = derive_key(password, song_salt)
+
 
     # Descifrar las canciones y verificar si la canción ya existe
-    for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author in songs:
+    for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt in songs:
+        key = derive_key(password, song_salt)
         decrypted_song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
         decrypted_author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
         if decrypted_song_name == song_name and decrypted_author_name == author_name:
@@ -24,13 +24,15 @@ def register_song(user_id, song_name, author_name, password):
     # Encriptar el nombre de la canción y el nombre del autor
     nonce_song = os.urandom(12)
     nonce_author = os.urandom(12)
+    salt = generate_salt()
+    key = derive_key(password, salt)
     encrypted_song_name = encrypt_aes_gcm(song_name, key, nonce_song)
     encrypted_author_name = encrypt_aes_gcm(author_name, key, nonce_author)
 
     # Insertar la canción en la base de datos
     cursor.execute(
         'INSERT INTO songs (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt) VALUES (?, ?, ?, ?, ?, ?)',
-        (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt)
+        (user_id, encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, salt)
     )
     conn.commit()
     conn.close()

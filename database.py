@@ -54,7 +54,6 @@ class Database:
         author_name TEXT NOT NULL,
         comment TEXT NOT NULL,
         signature BLOB,
-        com_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
         )
         ''')
