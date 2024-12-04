@@ -255,7 +255,7 @@ def issue_certificate(sub_key, sub_cert, user_name):
     )
     print(f"{user_name} private key generated. Algorithm: RSA, Key length: 2048 bits")
 
-    # Crear el certificado para el usuario firmado por la CA subordinada
+    # Crear el certificado para el usuario firmado por la CA
     subject = x509.Name([
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, "User"),
         x509.NameAttribute(NameOID.COMMON_NAME, user_name),
