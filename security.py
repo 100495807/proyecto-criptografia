@@ -247,7 +247,40 @@ def create_subordinate_ca(root_key, root_cert, user_type, CERT_FOLDER):
     return sub_key, sub_cert
 
 
-def issue_certificate(sub_key, sub_cert, user_name):
+def issue_certificate(sub_key, sub_cert, user_name, master_password, salt):
+    # Solicitar la contraseña maestra
+    master_key = master_password.encode()
+
+
+
+    # Decodificar la clave privada del subordinado y la sal
+    encrypted_private_key = base64.b64decode(sub_key)
+    salt = base64.b64decode(salt)
+
+    # Derivar la clave de cifrado a partir de la clave maestra
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key = kdf.derive(master_key)
+
+    # Descifrar la clave privada del subordinado usando AES-GCM
+    nonce = encrypted_private_key[:12]
+    tag = encrypted_private_key[12:28]
+    cipher_text = encrypted_private_key[28:]
+
+    cipher = Cipher(algorithms.AES(key), modes.GCM(nonce, tag), backend=default_backend())
+    decryptor = cipher.decryptor()
+    try:
+        sub_key_pem = decryptor.update(cipher_text) + decryptor.finalize()
+    except InvalidTag:
+        raise ValueError("Error al descifrar la clave privada del subordinado")
+
+    sub_key = serialization.load_pem_private_key(sub_key_pem, password=None, backend=default_backend())
+
     # Generar clave privada para el usuario
     user_key = rsa.generate_private_key(
         public_exponent=65537,
@@ -364,7 +397,7 @@ def decrypt_private_key(encrypted_private_key_b64, key, nonce):
         return None
 
 
-def save_private_key(cert_name, private_key):
+def save_private_key(cert_name, private_key, master_key):
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
 
@@ -375,11 +408,32 @@ def save_private_key(cert_name, private_key):
         encryption_algorithm=serialization.NoEncryption()
     )
 
-    # Guardar la clave privada en la base de datos
+
+    # Derivar una clave de cifrado a partir de la clave maestra
+    salt = os.urandom(16)
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key = kdf.derive(master_key.encode())
+
+    # Cifrar la clave privada usando AES-GCM
+    nonce = os.urandom(12)
+    cipher = Cipher(algorithms.AES(key), modes.GCM(nonce), backend=default_backend())
+    encryptor = cipher.encryptor()
+    cipher_text = encryptor.update(private_key_pem) + encryptor.finalize()
+    tag = encryptor.tag
+
+    encrypted_private_key = base64.b64encode(nonce + tag + cipher_text).decode('utf-8')
+
+    # Guardar la clave privada cifrada y la sal en la base de datos
     cursor.execute('''
-    INSERT OR REPLACE INTO private_keys (cert_name, private_key) 
-    VALUES (?, ?)
-    ''', (cert_name, private_key_pem))
+        INSERT OR REPLACE INTO private_keys (cert_name, private_key, salt)
+        VALUES (?, ?, ?)
+    ''', (cert_name, encrypted_private_key, base64.b64encode(salt).decode('utf-8')))
 
     conn.commit()
     conn.close()
@@ -391,15 +445,29 @@ def get_private_key_from_db(cert_name):
     cursor = conn.cursor()
 
     cursor.execute('''
-    SELECT private_key FROM private_keys WHERE cert_name = ?
+    SELECT private_key, salt FROM private_keys WHERE cert_name = ?
     ''', (cert_name,))
     row = cursor.fetchone()
 
     conn.close()
 
     if row:
-        private_key_pem = row[0]
-        return serialization.load_pem_private_key(private_key_pem, password=None,
-                                                  backend=default_backend())
+        encrypted_private_key, salt = row
+        return encrypted_private_key, salt
     else:
-        return None
+        return None, None
+
+def certificado_exist(cert_name):
+    conn = sqlite3.connect('database.db')
+    cursor = conn.cursor()
+
+    cursor.execute('''
+    SELECT private_key FROM private_keys WHERE cert_name = ?
+    ''', (cert_name,))
+    row = cursor.fetchone()
+
+    conn.close()
+    if row:
+        return True
+    else:
+        return False

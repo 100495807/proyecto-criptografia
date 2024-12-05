@@ -27,6 +27,7 @@ class UserApp:
         self.root.title("Inicio de sesión y registro")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
+
         # Define un estilo
         self.style = ttk.Style()
 

@@ -3,7 +3,8 @@ from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 
-from security import get_private_key_from_db, create_root_ca, create_subordinate_ca, save_private_key, issue_certificate
+from security import get_private_key_from_db, create_root_ca, create_subordinate_ca, save_private_key, \
+    issue_certificate, certificado_exist
 from query_users import get_user_type
 
 class CertificateManager:
@@ -30,11 +31,11 @@ class CertificateManager:
         if user_type == "Artista":
             print("Solicitando certificado de Artista...")
 
-            artista_sub_key = get_private_key_from_db('artista_sub_key')
+            artista_sub_key, salt = get_private_key_from_db('artista_sub_key')
             with open(os.path.join(self.cert_folder, 'artista_sub_cert.pem'), 'rb') as f:
                 artista_sub_cert = x509.load_pem_x509_certificate(f.read(), default_backend())
-
-            user_key, user_cert = issue_certificate(artista_sub_key, artista_sub_cert, username)
+            master_key = input("Introduzca la contraseña maestra: ")
+            user_key, user_cert = issue_certificate(artista_sub_key, artista_sub_cert, username, master_key, salt)
             print(f"Certificado de Artista para {username} emitido correctamente.")
 
         elif user_type == "Oyente":
@@ -65,41 +66,42 @@ class CertificateManager:
         artista_sub_cert_path = os.path.join(self.cert_folder, 'artista_sub_cert.pem')
 
         # Verificar si el certificado raíz y su clave privada existen en la base de datos
-        root_key = get_private_key_from_db('root_key')
+        root_key = certificado_exist('root_key')
 
         # Comprobar si el certificado raíz ya existe en la carpeta
         if not os.path.exists(root_cert_path) or not root_key:
+            master_key = input("Introduzca la contraseña maestra: ")
             print("Certificado raíz o clave no encontrados. Creando ambos...")
             if os.path.exists(root_cert_path):
                 os.remove(root_cert_path)
             root_key, root_cert = create_root_ca("Root")
-            save_private_key('root_key', root_key)
+            save_private_key('root_key', root_key, master_key)
             with open(root_cert_path, 'wb') as f:
                 f.write(root_cert.public_bytes(serialization.Encoding.PEM))
         print("Certificado raíz cargado correctamente.")
 
         # Verificar si el certificado subordinado de oyente y su clave privada existen en la base de datos
-        oyente_sub_key = get_private_key_from_db('oyente_sub_key')
+        oyente_sub_key = certificado_exist('oyente_sub_key')
 
         if not os.path.exists(oyente_sub_cert_path) or not oyente_sub_key:
             print("Certificado subordinado de oyente o clave no encontrados. Creando ambos...")
             if os.path.exists(oyente_sub_cert_path):
                 os.remove(oyente_sub_cert_path)
             oyente_sub_key, oyente_sub_cert = create_subordinate_ca(root_key, root_cert, "Oyente", self.cert_folder)
-            save_private_key('oyente_sub_key', oyente_sub_key)
+            save_private_key('oyente_sub_key', oyente_sub_key, master_key)
             with open(oyente_sub_cert_path, 'wb') as f:
                 f.write(oyente_sub_cert.public_bytes(serialization.Encoding.PEM))
         print("Certificado subordinado de oyente cargado correctamente.")
 
         # Verificar si el certificado subordinado de artista y su clave privada existen en la base de datos
-        artista_sub_key = get_private_key_from_db('artista_sub_key')
+        artista_sub_key = certificado_exist('artista_sub_key')
 
         if not os.path.exists(artista_sub_cert_path) or not artista_sub_key:
             print("Certificado subordinado de artista o clave no encontrados. Creando ambos...")
             if os.path.exists(artista_sub_cert_path):
                 os.remove(artista_sub_cert_path)
             artista_sub_key, artista_sub_cert = create_subordinate_ca(root_key, root_cert, "Artista", self.cert_folder)
-            save_private_key('artista_sub_key', artista_sub_key)
+            save_private_key('artista_sub_key', artista_sub_key, master_key)
             with open(artista_sub_cert_path, 'wb') as f:
                 f.write(artista_sub_cert.public_bytes(serialization.Encoding.PEM))
         print("Certificado subordinado de artista cargado correctamente.")

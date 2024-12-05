@@ -76,7 +76,8 @@ class Database:
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS private_keys (
         cert_name TEXT PRIMARY KEY,
-        private_key BLOB
+        private_key BLOB,
+        salt BLOB
         )
         ''')
         self.conn.commit()
