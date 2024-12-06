@@ -922,7 +922,7 @@ try:
     if __name__ == "__main__":
         root = tk.Tk()
         app = UserApp(root)
-        '''app.database_manager.delete_all_tables()'''
+        app.database_manager.delete_all_tables()
         app.database_manager.create_all_tables()
         app.cert_manager.initialize_certificates()
         root.geometry("600x500")
