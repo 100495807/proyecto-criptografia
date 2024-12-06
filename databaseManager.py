@@ -1,7 +1,7 @@
 import sqlite3
 import os
 
-class Database:
+class DatabaseManager:
     def __init__(self, db_name='database.db'):
         base_dir = os.path.dirname(__file__)
         self.db_path = os.path.join(base_dir, db_name)
@@ -43,6 +43,7 @@ class Database:
         nonce_song BLOB NOT NULL,
         nonce_author BLOB NOT NULL,
         song_salt BLOB NOT NULL,
+        author_salt BLOB NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id)
         )
         ''')
@@ -93,3 +94,6 @@ class Database:
         cursor.execute('DROP TABLE IF EXISTS private_keys')
         self.conn.commit()
         self.close_connection()
+
+
+

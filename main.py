@@ -4,21 +4,15 @@ import string
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
-
-
-from certificate import CertificateManager
-from database import Database
-from query_users import register_user, authenticate_user, get_user_id, delete_songs_by_user_id, \
-    verify_email_recovery, get_user_by_email, update_password, get_username_by_id, get_user_type, \
-    get_user_certificate
-from query_songs import register_song, get_songs_by_user
-from security import hash_password, verify_password, generate_salt, \
-    decrypt_aes_gcm, derive_key, generate_rsa_key_pair
+from certificateManager import CertificateManager
+from databaseManager import DatabaseManager
+from usersManager import UserManager
+from securityManager import SecurityManager
 from email.message import EmailMessage
 from cryptography.exceptions import InvalidTag
-from validation import validate_username, validate_password, validate_phone, validate_email
-from query_comments import add_comment, get_comments, verify_comment, get_private_key
-from insert_song import insert_artist_song, get_artist_songs
+from validateManager import ValidateManager
+from commentsManager import CommentManager
+from songsManager import SongManager
 
 
 class UserApp:
@@ -27,6 +21,14 @@ class UserApp:
         self.root.title("Inicio de sesión y registro")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
+        # Instancias de las clases
+        self.cert_manager = CertificateManager()
+        self.database_manager = DatabaseManager()
+        self.validate_manager = ValidateManager()
+        self.song_manager = SongManager()
+        self.comment_manager = CommentManager()
+        self.users_manager = UserManager()
+        self.security_manager = SecurityManager()
 
         # Define un estilo
         self.style = ttk.Style()
@@ -525,7 +527,7 @@ class UserApp:
         self.back_button.grid(row=1, column=3, padx=20, pady=20, sticky="ew")
 
     def show_artist_song_frame(self):
-        user_type = get_user_type(self.current_user)
+        user_type = self.users_manager.get_user_type(self.current_user)
         if user_type != "Artista":
             messagebox.showerror("Error", "Solo los artistas pueden acceder a esta sección")
             return
@@ -534,18 +536,18 @@ class UserApp:
     def login(self):
         username = self.username_entry_login.get()
         password = self.password_entry_login.get()
-        user_type = get_user_type(username)
+        user_type = self.users_manager.get_user_type(username)
 
-        result = authenticate_user(username)
+        result = self.users_manager.authenticate_user(username)
         if result:
             stored_password, salt = result
-            if verify_password(stored_password, password, salt):
+            if self.security_manager.verify_password(stored_password, password, salt):
                 messagebox.showinfo("Inicio de sesión", "Inicio de sesión completado")
                 self.current_user = username
                 self.current_password = password
                 self.current_salt = salt
                 self.user_type = user_type
-                self.show_frame(self.post_login_frame)  # Show the new frame
+                self.show_frame(self.post_login_frame)
             else:
                 messagebox.showerror("Inicio de sesión",
                                      "Nombre de usuario o contraseña "
@@ -565,25 +567,24 @@ class UserApp:
         self.user_type = self.artist_listener_combobox.get()
         user_type = self.user_type
 
-        print(f"Tipo de usuario registrado: {self.user_type}")
+
         if not all([username, email, password, repeat_password, phone, gender, address, user_type]):
             messagebox.showerror("Registro", "Todos los campos son obligatorios")
             return
 
-        if (not validate_username(username) or not validate_password(password,
-                                                                     repeat_password)
-                or not validate_email(email) or not validate_phone(phone)):
+        if (not self.validate_manager.validate_username(username) or not self.validate_manager.validate_password(password,
+                                                                                                                 repeat_password)
+                or not self.validate_manager.validate_email(email) or not self.validate_manager.validate_phone(phone)):
             return
 
-        salt = generate_salt()
-        hashed_password, salt = hash_password(password, salt)
+        salt = self.security_manager.generate_salt()
+        hashed_password, salt = self.security_manager.hash_password(password, salt)
 
-        # Generar claves RSA
-        private_key, public_key = generate_rsa_key_pair()
 
-        if register_user(username, email, hashed_password, salt, phone, gender, address,
-                         private_key, public_key, user_type):
+
+        if self.users_manager.register_user(username, email, hashed_password, salt, phone, gender, address, user_type):
             messagebox.showinfo("Registro", "Usuario registrado")
+            print(f"Tipo de usuario registrado: {self.user_type}")
             self.show_frame(self.login_username_frame)
         else:
             messagebox.showerror("Registro", "Usuario, email o móvil ya registrados")
@@ -597,13 +598,13 @@ class UserApp:
                                  "Por favor, ingrese el nombre de la canción y el autor")
             return
 
-        user_id = get_user_id(self.current_user)
+        user_id = self.users_manager.get_user_id(self.current_user)
         if user_id is None:
             messagebox.showerror("Registrar Canción", "Id de usuario no encontrado")
             return
 
         try:
-            if not register_song(user_id, song_name, author_name, self.current_password):
+            if not self.song_manager.register_song(user_id, song_name, author_name, self.current_password):
                 raise ValueError("Error al registrar la canción")
 
             messagebox.showinfo("Registrar Canción", "Canción registrada")
@@ -613,13 +614,13 @@ class UserApp:
             messagebox.showerror("Registrar Canción", str(e))
 
     def play_random_song(self):
-        user_id = get_user_id(self.current_user)
+        user_id = self.users_manager.get_user_id(self.current_user)
         if user_id is None:
             messagebox.showerror("Escuchar Canción", "Id de usuario no encontrado")
             return
 
         try:
-            songs = get_songs_by_user(user_id)
+            songs = self.song_manager.get_songs_by_user(user_id)
         except Exception as e:
             messagebox.showerror("Escuchar Canción", f"Error al encontar canción: {e}")
             return
@@ -632,9 +633,9 @@ class UserApp:
         encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt = song
 
         try:
-            key = derive_key(self.current_password, song_salt)
-            song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
-            author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
+            key = self.security_manager.derive_key(self.current_password, song_salt)
+            song_name = self.security_manager.decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
+            author_name = self.security_manager.decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
             messagebox.showinfo("Escuchar Canción", f"Escuchando '{song_name}' de "
                                                     f"'{author_name}'")
         except Exception as e:
@@ -656,7 +657,7 @@ class UserApp:
             return
 
         try:
-            result = verify_email_recovery(email)
+            result = self.users_manager.verify_email_recovery(email)
         except Exception as e:
             messagebox.showerror("Error", f"Fallo al obtener email: {e}")
             return
@@ -725,21 +726,21 @@ class UserApp:
         if not email:
             messagebox.showerror("Error", "Por favor, ingrese su correo electrónico")
             return
-        user_id = get_user_by_email(email)
+        user_id = self.users_manager.get_user_by_email(email)
         if user_id is None:
             messagebox.showerror("Error", "Usuario no encontrado")
             return
 
         try:
-            delete_songs_by_user_id(user_id)
+            self.users_manager.delete_songs_by_user_id(user_id)
         except Exception as e:
             messagebox.showerror("Error", f"Error al borrar canciones: {e}")
             return
 
         # Actualizamos la contraseña
-        salt = generate_salt()
-        hashed_password, salt = hash_password(new_password, salt)
-        if update_password(user_id, hashed_password, salt):
+        salt = self.security_manager.generate_salt()
+        hashed_password, salt = self.security_manager.hash_password(new_password, salt)
+        if self.users_manager.update_password(user_id, hashed_password, salt):
             messagebox.showinfo("Exitoso", "Contraseña cambiada")
             self.current_password = new_password
             self.show_frame(self.login_username_frame)
@@ -750,19 +751,20 @@ class UserApp:
         for item in self.songs_treeview.get_children():
             self.songs_treeview.delete(item)  # Clear the treeview
 
-        user_id = get_user_id(self.current_user)
+        user_id = self.users_manager.get_user_id(self.current_user)
         if user_id is None:
-            messagebox.showerror("View Songs", "Id de usuario no encontrado")
+            messagebox.showerror("Ver Canciones", "Id de usuario no encontrado")
             return
 
-        songs = get_songs_by_user(user_id)
+        songs = self.song_manager.get_songs_by_user(user_id)
 
         # Desciframos las canciones y las mostramos en el treeview
-        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt in songs:
+        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt, author_salt in songs:
             try:
-                key = derive_key(self.current_password, song_salt)
-                song_name = decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
-                author_name = decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
+                key_song = self.security_manager.derive_key(self.current_password, song_salt)
+                key_author = self.security_manager.derive_key(self.current_password, author_salt)
+                song_name = self.security_manager.decrypt_aes_gcm(encrypted_song_name, key_song, nonce_song)
+                author_name = self.security_manager.decrypt_aes_gcm(encrypted_author_name, key_author, nonce_author)
                 self.songs_treeview.insert("", "end", values=(song_name, author_name))
             except InvalidTag as e:
                 messagebox.showerror("Ver canciones",
@@ -774,18 +776,18 @@ class UserApp:
         song_name = self.song_name_comment_entry.get()
         author_name = self.author_comment_entry.get()
         comment = self.comment_entry.get()
-        user_id = get_user_id(self.current_user)
+        user_id = self.users_manager.get_user_id(self.current_user)
         if user_id is None:
             messagebox.showerror("Agregar comentario", "Id de usuario no encontrado")
             return
 
         # Obtener la clave privada del usuario
-        private_key_pem = get_private_key(user_id, self.current_password, self.current_salt)
+        private_key_pem = self.comment_manager.get_private_key(user_id, self.current_password, self.current_salt)
         if private_key_pem is None:
             messagebox.showerror("Agregar comentario", "Clave privada no encontrada")
             return
 
-        if add_comment(user_id, song_name, author_name, comment, private_key_pem,
+        if self.comment_manager.add_comment(user_id, song_name, author_name, comment, private_key_pem,
                        self.current_password):
             messagebox.showinfo("Agregar comentario", "Comentario agregado")
             self.song_name_comment_entry.delete(0, tk.END)
@@ -796,14 +798,13 @@ class UserApp:
                                  "Error al agregar comentario o la canción no está registrada")
 
     def verify_comments(self, song_id):
-        comments = get_comments(song_id)  # Obtener comentarios de la canción
+        comments = self.comment_manager.get_comments(song_id)  # Obtener comentarios de la canción
         for user_id, comment, signature in comments:
             print(f"Verificando comentario: {comment}")
-            user_cert = get_user_certificate(user_id)  # Obtener el certificado del usuario
             print(f"Certificado del usuario {user_id} cargado.")
 
             # Verificar la firma del comentario con la clave pública
-            is_verified = verify_comment(user_id, comment, signature)
+            is_verified = self.comment_manager.verify_comment(user_id, comment, signature)
 
             if is_verified:
                 print(f"Comentario verificado correctamente: {comment}")
@@ -816,12 +817,12 @@ class UserApp:
             self.comments_treeview.delete(item)
 
         # Obtener todos los comentarios
-        comments = get_comments()
+        comments = self.comment_manager.get_comments()
 
         for user_id, song_name, author_name, comment, signature in comments:
-            username = get_username_by_id(user_id)
+            username = self.users_manager.get_username_by_id(user_id)
             # Verificar si el comentario está firmado correctamente
-            is_verified = verify_comment(user_id, comment, signature)
+            is_verified = self.comment_manager.verify_comment(user_id, comment, signature)
             verification_status = "Sí" if is_verified else "No"
 
             # Insertar en el treeview
@@ -834,7 +835,7 @@ class UserApp:
         self.show_frame(self.view_comments_frame)
 
     def issue_user_certificate(self):
-        cert_manager.issue_user_certificate(self.username_entry_login.get())
+        self.cert_manager.create_user_certificate(self.username_entry_login.get())
 
 
     def insert_artist_song(self):
@@ -847,7 +848,7 @@ class UserApp:
             messagebox.showerror("Error", "Todos los campos son obligatorios")
             return
 
-        user_id = get_user_id(self.current_user)
+        user_id = self.users_manager.get_user_id(self.current_user)
         if user_id is None:
             messagebox.showerror("Error", "Usuario no encontrado")
             return
@@ -856,7 +857,7 @@ class UserApp:
         password = self.current_password
 
         # Insertar la canción en la base de datos
-        if insert_artist_song(user_id, song_name, lyrics, description, credits, password):
+        if self.song_manager.insert_artist_song(user_id, song_name, lyrics, description, credits, password):
             messagebox.showinfo("Éxito", "Canción insertada correctamente")
             self.song_name_entry.delete(0, tk.END)
             self.lyrics_entry.delete("1.0", tk.END)
@@ -866,14 +867,14 @@ class UserApp:
             messagebox.showerror("Error", "No se pudo insertar la canción")
 
     def view_artists_songs(self):
-        user_id = get_user_id(self.current_user)
+        user_id = self.users_manager.get_user_id(self.current_user)
 
         if user_id is None:
             messagebox.showerror("Ver mis canciones", "Id de usuario no encontrado")
             return
 
         password = self.current_password
-        songs = get_artist_songs(user_id, password)
+        songs = self.song_manager.get_artist_songs(user_id, password)
 
         # Limpiar el Treeview antes de agregar nuevas canciones
         for item in self.artist_songs_treeview.get_children():
@@ -894,14 +895,14 @@ class UserApp:
         if messagebox.askokcancel("Salir", "¿Estás seguro que quieres salir?"):
             self.root.destroy()
 
-cert_manager = CertificateManager()
-database = Database()
+
 try:
     if __name__ == "__main__":
         root = tk.Tk()
         app = UserApp(root)
-        database.create_all_tables()
-        cert_manager.initialize_certificates()
+        app.database_manager.delete_all_tables()
+        app.database_manager.create_all_tables()
+        app.cert_manager.initialize_certificates()
         root.geometry("600x500")
         root.mainloop()
 except KeyboardInterrupt:
