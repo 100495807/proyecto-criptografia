@@ -12,7 +12,6 @@ from cryptography.x509.oid import NameOID
 import datetime
 
 class SecurityManager:
-
     def __init__(self, db_name='database.db'):
         base_dir = os.path.dirname(__file__)
         self.db_path = os.path.join(base_dir, db_name)

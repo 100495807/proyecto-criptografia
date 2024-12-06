@@ -36,7 +36,7 @@ class ValidateManager:
     @staticmethod
     def validate_phone(phone):
         number_pattern = r"^[0-9]+$"
-        if not re.match(number_pattern, phone):
+        if not re.match(number_pattern, phone) or len(phone) != 9:
             messagebox.showerror("Error de Validación", "Número de teléfono inválido")
             return False
         return True

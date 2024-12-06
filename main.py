@@ -96,6 +96,8 @@ class UserApp:
         self.show_frame(self.main_frame)
         self.password_visible = False
 
+        '''self.create_test_buttons()'''
+
     def show_frame(self, frame):
         self.main_frame.pack_forget()
         self.login_username_frame.pack_forget()
@@ -713,6 +715,9 @@ class UserApp:
             messagebox.showerror("Error", "Código de verificación incorrecto")
             return
 
+        if not self.validate_manager.validate_password(new_password, new_repeat_password):
+            return
+
         if not new_password or not new_repeat_password:
             messagebox.showerror("Error", "Por favor, ingrese su nueva contraseña")
             return
@@ -787,8 +792,7 @@ class UserApp:
             messagebox.showerror("Agregar comentario", "Clave privada no encontrada")
             return
 
-        if self.comment_manager.add_comment(user_id, song_name, author_name, comment, private_key_pem,
-                       self.current_password):
+        if self.comment_manager.add_comment(user_id, song_name, author_name, comment, private_key_pem):
             messagebox.showinfo("Agregar comentario", "Comentario agregado")
             self.song_name_comment_entry.delete(0, tk.END)
             self.author_comment_entry.delete(0, tk.END)
@@ -797,9 +801,10 @@ class UserApp:
             messagebox.showerror("Agregar comentario",
                                  "Error al agregar comentario o la canción no está registrada")
 
+    # main.py
     def verify_comments(self, song_id):
         comments = self.comment_manager.get_comments(song_id)  # Obtener comentarios de la canción
-        for user_id, comment, signature in comments:
+        for user_id, song_name, author_name, comment, signature in comments:
             print(f"Verificando comentario: {comment}")
             print(f"Certificado del usuario {user_id} cargado.")
 
@@ -810,6 +815,9 @@ class UserApp:
                 print(f"Comentario verificado correctamente: {comment}")
             else:
                 print(f"Firma inválida o comentario no verificado: {comment}")
+                # Mostrar aviso en la interfaz
+                messagebox.showwarning("Comentario alterado",
+                                       f"El comentario '{comment}' ha sido alterado y no se puede garantizar su fiabilidad.")
 
     def view_comments(self):
         # Limpiar el treeview de comentarios
@@ -895,12 +903,26 @@ class UserApp:
         if messagebox.askokcancel("Salir", "¿Estás seguro que quieres salir?"):
             self.root.destroy()
 
+    # comprobación de que pasa si se altera un comentario - Descomentar (tmb linea 99)
+    '''def create_test_buttons(self):
+        test_frame = tk.Frame(self.root)
+        test_frame.pack()
+
+        alter_comment_button = tk.Button(test_frame, text="Alterar Comentario", command=self.alter_comment_test)
+        alter_comment_button.pack()
+
+    def alter_comment_test(self):
+        comment_id = 1  # ID del comentario que deseas alterar para la prueba
+        new_comment = "Este comentario ha sido alterado."
+        self.comment_manager.alter_comment(comment_id, new_comment)
+        messagebox.showinfo("Prueba", "Comentario alterado para prueba.")
+    '''
 
 try:
     if __name__ == "__main__":
         root = tk.Tk()
         app = UserApp(root)
-        app.database_manager.delete_all_tables()
+        '''app.database_manager.delete_all_tables()'''
         app.database_manager.create_all_tables()
         app.cert_manager.initialize_certificates()
         root.geometry("600x500")

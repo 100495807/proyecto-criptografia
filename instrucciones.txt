@@ -1,0 +1,10 @@
+-Para poder ejecutar el programa se debe de abrir el archivo `main.py` y ejecutar dicho archivo.
+
+-Para la base de datos se ha utilizado SQLite, por lo que no es necesario instalar nada adicional.
+
+-Si se quiere borrar la base de datos, al final de `main.py` se encuentra una línea de código que se encarga
+de borrar la base de datos, solo se debe de descomentar dicha línea de código.
+
+-Si se quiere ver cómo se altera un comentario y se verifica que pierde la firma, se deben descomentar
+las siguientes líneas del archivo `main.py`: la 99 y de la 907 a la 919, con esto aparecerá en la UI
+un botón para poder alterar el primer comentario que haya y se verá que ha sido alterado.

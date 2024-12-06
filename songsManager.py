@@ -72,14 +72,15 @@ class SongManager:
         cursor = conn.cursor()
 
         # Seleccionar todas las canciones del usuario
-        cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt FROM songs WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt, author_salt FROM songs WHERE user_id = ?', (user_id,))
         songs = cursor.fetchall()
 
         # Descifrar las canciones y verificar si la canción ya existe
-        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt in songs:
-            key = self.security_manager.derive_key(password, song_salt)
-            decrypted_song_name = self.security_manager.decrypt_aes_gcm(encrypted_song_name, key, nonce_song)
-            decrypted_author_name = self.security_manager.decrypt_aes_gcm(encrypted_author_name, key, nonce_author)
+        for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt, author_salt in songs:
+            key_song = self.security_manager.derive_key(password, song_salt)
+            key_author = self.security_manager.derive_key(password, author_salt)
+            decrypted_song_name = self.security_manager.decrypt_aes_gcm(encrypted_song_name, key_song, nonce_song)
+            decrypted_author_name = self.security_manager.decrypt_aes_gcm(encrypted_author_name, key_author, nonce_author)
             if decrypted_song_name == song_name and decrypted_author_name == author_name:
                 conn.close()
                 return False  # La canción ya existe

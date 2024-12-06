@@ -11,19 +11,9 @@ class CommentManager:
         self.user_manager = UserManager()
         self.security_manager = SecurityManager()
 
-    def add_comment(self, user_id, song_name, author_name, comment, private_key_pem, password):
-        # Verificar si la canción ya está registrada por el usuario
-        songs = self.song_manager.get_songs_by_user(user_id)
-        song_exists = any(
-            self.security_manager.decrypt_aes_gcm(encrypted_song_name, self.security_manager.derive_key(password, song_salt), nonce_song) == song_name and
-            self.security_manager.decrypt_aes_gcm(encrypted_author_name, self.security_manager.derive_key(password, author_salt), nonce_author) == author_name
-            for encrypted_song_name, encrypted_author_name, nonce_song, nonce_author, song_salt, author_salt in songs
-        )
-
-        if song_exists:
-            signature = self.security_manager.sign_comment(private_key_pem, comment)
-        else:
-            signature = None
+    def add_comment(self, user_id, song_name, author_name, comment, private_key_pem):
+        # Firmar el comentario sin verificar si la canción está registrada
+        signature = self.security_manager.sign_comment(private_key_pem, comment)
 
         conn = self.security_manager.create_connection()
         cursor = conn.cursor()
@@ -123,3 +113,10 @@ class CommentManager:
             return private_key_pem
         else:
             return None
+
+    def alter_comment(self, comment_id, new_comment):
+        conn = self.security_manager.create_connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE comments SET comment = ? WHERE id = ?', (new_comment, comment_id))
+        conn.commit()
+        conn.close()
