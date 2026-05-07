@@ -36,7 +36,7 @@ Implementar una aplicacion que combine gestion de usuarios y contenido con mecan
 | `songsManager.py` | Gestion de canciones. |
 | `commentsManager.py` | Comentarios firmados y verificacion. |
 | `validateManager.py` | Validaciones de datos de entrada. |
-| `certificados/` | Certificados generados/usados por la aplicacion. |
+| `certificados/` | Directorio generado en ejecucion para certificados locales. |
 
 ## Como Ejecutarlo
 
@@ -44,6 +44,24 @@ Instalar dependencias:
 
 ```bash
 pip install cryptography
+```
+
+Si quieres usar la recuperacion de contrasena por email, configura las credenciales SMTP como variables de entorno antes de ejecutar la aplicacion:
+
+```bash
+export SMTP_SERVER=smtp.gmail.com
+export SMTP_PORT=587
+export SMTP_SENDER_EMAIL=tu_correo@example.com
+export SMTP_SENDER_PASSWORD=tu_password_o_app_password
+```
+
+En PowerShell:
+
+```powershell
+$env:SMTP_SERVER = "smtp.gmail.com"
+$env:SMTP_PORT = "587"
+$env:SMTP_SENDER_EMAIL = "tu_correo@example.com"
+$env:SMTP_SENDER_PASSWORD = "tu_password_o_app_password"
 ```
 
 Ejecutar:
@@ -60,9 +78,11 @@ python main.py
 - Crear y validar certificados X.509.
 - Integrar seguridad criptografica en una aplicacion con interfaz grafica y base de datos.
 
-## Nota De Seguridad
+## Configuracion Y Seguridad
 
-Este repositorio es academico. Antes de reutilizarlo en un entorno real conviene revisar secretos, credenciales, ficheros generados y configuracion de correo para que no haya datos sensibles versionados.
+Este repositorio es academico. No se deben versionar credenciales, bases de datos locales, certificados generados, claves privadas ni ficheros `.env`.
+
+La configuracion de correo se lee desde variables de entorno (`SMTP_SERVER`, `SMTP_PORT`, `SMTP_SENDER_EMAIL` y `SMTP_SENDER_PASSWORD`) para evitar secretos hardcodeados en el codigo.
 
 ## Estado
 

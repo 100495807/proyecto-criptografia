@@ -1,4 +1,5 @@
 import smtplib
+import os
 import random
 import string
 import tkinter as tk
@@ -682,10 +683,17 @@ class UserApp:
 
         # Enviar el código de verificación por email
         try:
-            smtp_server = 'smtp.gmail.com'
-            smtp_port = 587
-            sender_email = 'SMTP_SENDER_EMAIL'
-            sender_password = 'SMTP_SENDER_PASSWORD'
+            smtp_server = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
+            smtp_port = int(os.environ.get('SMTP_PORT', '587'))
+            sender_email = os.environ.get('SMTP_SENDER_EMAIL')
+            sender_password = os.environ.get('SMTP_SENDER_PASSWORD')
+
+            if not sender_email or not sender_password:
+                messagebox.showerror(
+                    "Error",
+                    "Configura SMTP_SENDER_EMAIL y SMTP_SENDER_PASSWORD antes de enviar emails."
+                )
+                return
 
             # Create the email message
             msg = EmailMessage()
@@ -929,4 +937,3 @@ try:
         root.mainloop()
 except KeyboardInterrupt:
     print("Ejecución detenida.")
-

@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+
+.idea/
+.vscode/
+
+database.db
+*.sqlite
+*.sqlite3
+
+certificados/
+*.pem
+
+.env
+*.env
